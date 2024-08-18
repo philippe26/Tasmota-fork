@@ -22,6 +22,9 @@
  * TM1638 8 switch, led and 7 segment
  *
  * Uses GPIO TM1638 DIO, TM1638 CLK and TM1638 STB
+ * 
+ * Leds 0..7 are connected to SEG9 (Grid1=led0, grid2=led1, etc) => TM1638_MAX_LEDS in range [1..8]
+ * Leds 8..15 are  connected to SEG10 => TM1638_MAX_LEDS in range [9..16]
 \*********************************************************************************************/
 
 #define XDRV_66               66
@@ -53,6 +56,14 @@
 #define TM1638_COLOR_GREEN    2
 
 #define TM1638_CLOCK_DELAY    1    // uSec
+
+#if TM1638_MAX_LEDS > 16
+#error "TM1638 driver accepts up to 16 leds connected to SEG9 & SEG10"
+#endif
+
+#if TM1638_MAX_KEYS > 8
+#error "TM1638 driver accepts up to 8 keys"
+#endif
 
 struct TM1638 {
   int8_t clock_pin = 0;
@@ -187,8 +198,13 @@ void TmPower(void) {
   power_t rpower = XdrvMailbox.index >> Tm1638.led_offset;
   for (uint32_t i = 0; i < TM1638_MAX_LEDS; i++) {
     uint32_t state = rpower &1;
-    uint8_t color = (state) ? TM1638_COLOR_RED : TM1638_COLOR_NONE;
-    Tm1638SetLED(color, i);
+    if (i<8) {
+      uint8_t color = (state) ? TM1638_COLOR_RED : TM1638_COLOR_NONE;
+      Tm1638SetLED(color, i);
+    } else {
+      uint8_t color = (state) ? TM1638_COLOR_GREEN : TM1638_COLOR_NONE;
+      Tm1638SetLED(color, i);
+    }
     rpower >>= 1;                             // Select next power
   }
 }

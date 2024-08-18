@@ -1035,9 +1035,9 @@ https://rya.nc/tasmota-fingerprint.html"
 //#define USE_TM1638                               // Add support for TM1638 switches copying Switch1 .. Switch8 (+1k code)
 //  #define TM1638_USE_AS_BUTTON                   // Add support for buttons
 //  #define TM1638_USE_AS_SWITCH                   // Add support for switches (default)
-//  #define TM1638_MAX_DISPLAYS    8               // Add support for power control 8 displays
-//  #define TM1638_MAX_KEYS        8               // Add support for 8 keys
-//  #define TM1638_MAX_LEDS        8               // Add support for 8 leds
+//  #define TM1638_MAX_DISPLAYS    8               // Add support for power control of 8 displayed digits (7 segments)
+//  #define TM1638_MAX_KEYS        8               // Add support for MAX_KEYS (up to 8 keys)
+//  #define TM1638_MAX_LEDS        8               // Add support for MAX_LEDS : up to 16 leds (leds 0..7 connected to SEG9, Leds 8..15 connected to SEG10)
 //#define USE_HX711                                // Add support for HX711 load cell (+1k5 code)
 //  #define USE_HX711_GUI                          // Add optional web GUI to HX711 as scale (+1k8 code)
 //  #define HX711_CAL_PRECISION     1              // When HX711 calibration is to course, raise this value

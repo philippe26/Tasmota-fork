@@ -528,6 +528,19 @@ void SetLedPowerIdx(uint32_t led, uint32_t state)
       DigitalWrite(GPIO_LED1, led, bitRead(TasmotaGlobal.led_inverted, led) ? !state : state);
     }
   }
+#ifdef ESP32
+  // HOOK to manage led by another drv (eg MCP23xx)
+  else {
+    uint32_t index = XdrvMailbox.index;
+    int32_t  payload= XdrvMailbox.payload;
+    XdrvMailbox.index = led;
+    XdrvMailbox.payload= state;
+    XdrvCall(FUNC_LED);
+    XdrvMailbox.index = index;
+    XdrvMailbox.payload=payload;
+  }
+#endif  // ESP32
+
 #ifdef USE_BUZZER
   if (led == 0) {
     BuzzerSetStateToLed(state);
@@ -563,6 +576,7 @@ void SetLedPowerAll(uint32_t state)
 
 void SetLedLink(uint32_t state) {
 #ifdef ESP32
+  // HOOK to manage Link led by another drv (eg ShellyPro)
   uint32_t index = XdrvMailbox.index;
   XdrvMailbox.index = state;
   XdrvCall(FUNC_LED_LINK);

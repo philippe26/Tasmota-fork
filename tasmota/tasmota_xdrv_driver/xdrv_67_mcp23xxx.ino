@@ -38,6 +38,10 @@
  *         Switch_n1..28   Sn   192..219  Switch to Gnd without internal pullup
  *         Relay1..32      R    224..255  Relay
  *         Relay_i1..32    Ri   256..287  Relay inverted
+ *         Led1..4         L    288..291  Led
+ *         Led_i1..4       Li   320..323  Led inverted
+ *         LedLink         LNK  544       Led link
+ *         LedLink_i       LNKi 576       Led Link inverted
  *         Output_Hi       Oh   3840      Fixed output high
  *         Output_lo       Ol   3872      Fixed output low
  *
@@ -156,6 +160,11 @@ struct MCP230 {
   int8_t switch_offset;
   bool base;
   bool interrupt;
+  uint32_t led_link; // only one led link, this field provide the pin assigned
+  uint8_t led_link_inverted;
+  uint8_t led_max;
+  uint8_t led_offset;
+  uint8_t led_inverted;
 } Mcp23x;
 
 uint16_t *Mcp23x_gpio_pin = nullptr;
@@ -543,6 +552,29 @@ bool MCP23xLoadTemplate(void) {
           Mcp23x.relay_max++;
           MCP23xPinMode(pin, OUTPUT);
         }
+        else if ((mpin >= AGPIO(GPIO_LED1)) && (mpin < (AGPIO(GPIO_LED1) + MAX_LEDS))) {                    
+          Mcp23x.led_max++;
+          MCP23xPinMode(pin, OUTPUT);
+        }
+        else if ((mpin >= AGPIO(GPIO_LED1_INV)) && (mpin < (AGPIO(GPIO_LED1_INV) + MAX_LEDS))) {
+          bitSet(Mcp23x.led_inverted, mpin - AGPIO(GPIO_LED1_INV));
+          mpin -= (AGPIO(GPIO_LED1_INV) - AGPIO(GPIO_LED1));
+          Mcp23x.led_max++;
+          MCP23xPinMode(pin, OUTPUT);
+        }
+        else if (mpin == AGPIO(GPIO_LEDLNK)) {          
+          Mcp23x.led_link=pin;
+          Mcp23x.led_link_inverted=0;
+          MCP23xPinMode(pin, OUTPUT);
+          SetPin(MAX_GPIO_PIN-1, GPIO_LEDLNK); // assign GPIO_LEDLNK for compatibility with tasmota core algorithm
+        }
+        else if (mpin == AGPIO(GPIO_LEDLNK_INV)) {          
+          mpin -= (AGPIO(GPIO_LEDLNK_INV) - AGPIO(GPIO_LEDLNK));
+          Mcp23x.led_link=pin;
+          Mcp23x.led_link_inverted=1;
+          MCP23xPinMode(pin, OUTPUT);
+          SetPin(MAX_GPIO_PIN-1, GPIO_LEDLNK); // assign GPIO_LEDLNK for compatibility with tasmota core algorithm
+        }
         else if (mpin == AGPIO(GPIO_OUTPUT_HI)) {
           MCP23xPinMode(pin, OUTPUT);
           MCP23xDigitalWrite(pin, 1);
@@ -556,8 +588,10 @@ bool MCP23xLoadTemplate(void) {
       }
       if ((Mcp23x.switch_max >= MAX_SWITCHES_SET) ||
           (Mcp23x.button_max >= MAX_KEYS_SET) ||
-          (Mcp23x.relay_max >= MAX_RELAYS_SET)) {
-        AddLog(LOG_LEVEL_INFO, PSTR("MCP: Max reached (S%d/B%d/R%d)"), Mcp23x.switch_max, Mcp23x.button_max, Mcp23x.relay_max);
+          (Mcp23x.relay_max >= MAX_RELAYS_SET) ||
+          (Mcp23x.led_max >= MAX_LEDS)) 
+          {
+        AddLog(LOG_LEVEL_INFO, PSTR("MCP: Max reached (S%d/B%d/R%d/L%d)"), Mcp23x.switch_max, Mcp23x.button_max, Mcp23x.relay_max, Mcp23x.led_max);
         break;
       }
     }
@@ -690,6 +724,9 @@ void MCP23xModuleInit(void) {
   Mcp23x.relay_offset = TasmotaGlobal.devices_present;
   Mcp23x.relay_max -= UpdateDevicesPresent(Mcp23x.relay_max);
 
+  Mcp23x.led_offset = TasmotaGlobal.leds_present;
+  TasmotaGlobal.leds_present+= Mcp23x.led_max;
+
   Mcp23x.button_offset = -1;
   Mcp23x.switch_offset = -1;
 }
@@ -802,6 +839,25 @@ bool MCP23xAddSwitch(void) {
   return true;
 }
 
+void MCP23xLedPower() {
+  uint32_t index = XdrvMailbox.index;
+  uint32_t state = (XdrvMailbox.payload)?1:0;
+  if (!Mcp23x.base) {
+    // Use relative and sequential led indexes
+    index -= Mcp23x.led_offset;    
+  }
+  if (MCP23xPinUsed(GPIO_LED1, index)) {
+    uint32_t pin = MCP23xPin(GPIO_LED1, index) & 0x3F;   // Fix possible overflow over 63 gpios
+    MCP23xDigitalWrite(pin, bitRead(Mcp23x.led_inverted, index) ? !state : state);    
+  }
+}
+
+void MCP23xLedLink() {
+  uint32_t state = (XdrvMailbox.index)?1:0;
+  if (Mcp23x.led_link) {
+    MCP23xDigitalWrite(Mcp23x.led_link, Mcp23x.led_link_inverted? !state : state);
+  }
+}
 /*********************************************************************************************\
  * Interface
 \*********************************************************************************************/
@@ -849,6 +905,12 @@ bool Xdrv67(uint32_t function) {
       case FUNC_ACTIVE:
         result = true;
         break;
+      case FUNC_LED:
+        MCP23xLedPower();
+        break;  
+      case FUNC_LED_LINK:
+        MCP23xLedLink();
+        break;    
     }
   }
   return result;

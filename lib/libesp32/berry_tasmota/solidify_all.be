@@ -7,19 +7,26 @@ import global
 import solidify
 import string as string2
 import re
+import introspect
 
 import sys
 sys.path().push('src/embedded')   # allow to import from src/embedded
 
 # globals that need to exist to make compilation succeed
-var globs = "path,ctypes_bytes_dyn,tasmota,ccronexpr,gpio,light,webclient,load,MD5,lv,light_state,udp,I2C_Driver,tcpserver,"
+var globs = "path,ctypes_bytes_dyn,tasmota,ccronexpr,gpio,light,webclient,load,MD5,lv,light_state,udp,tcpserver,log,"
             "lv_clock,lv_clock_icon,lv_signal_arcs,lv_signal_bars,lv_wifi_arcs_icon,lv_wifi_arcs,"
             "lv_wifi_bars_icon,lv_wifi_bars,"
             "_lvgl,"
             "int64"
 
+var glob_classes = "I2C_Driver"
+
 for g:string2.split(globs, ",")
   global.(g) = nil
+end
+
+for g:string2.split(glob_classes, ",")
+  compile(f"class {g} end")()
 end
 
 var prefix_dir = "src/embedded/"
@@ -80,6 +87,11 @@ def parse_file(fname, prefix_out)
       o = o.(subname)
       cl_name = obj_name
       obj_name = subname
+      if   (type(o) == 'class')
+        obj_name = 'class_' + obj_name
+      elif (type(o) == 'module')
+        obj_name = 'module_' + obj_name
+      end
     end
     solidify.dump(o, weak, fout, cl_name)
   end

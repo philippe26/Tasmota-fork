@@ -18,7 +18,7 @@
 */
 
 // Location specific includes
-#ifndef ESP32_STAGE                         // ESP32 Stage has no core_version.h file. Disable include via PlatformIO Option
+#if __has_include("core_version.h")         // ESP32 Stage has no core_version.h file. Disable include via PlatformIO Option
 #include <core_version.h>                   // Arduino_Esp8266 version information (ARDUINO_ESP8266_RELEASE and ARDUINO_ESP8266_RELEASE_2_7_1)
 #endif  // ESP32_STAGE
 #include "include/tasmota_compat.h"
@@ -83,7 +83,9 @@
 #include <LittleFS.h>
 #ifdef USE_SDCARD
 #include <SD.h>
+#ifdef SOC_SDMMC_HOST_SUPPORTED
 #include <SD_MMC.h>
+#endif  // SOC_SDMMC_HOST_SUPPORTED
 #endif  // USE_SDCARD
 #include "FFat.h"
 #include "FS.h"
@@ -303,16 +305,18 @@ struct TasmotaGlobal_t {
 
   bool serial_local;                        // Handle serial locally
   bool fallback_topic_flag;                 // Use Topic or FallbackTopic
+  bool no_mqtt_response;                    // Respond with rule processing only
   bool backlog_nodelay;                     // Execute all backlog commands with no delay
   bool backlog_mutex;                       // Command backlog pending
+  bool backlog_no_mqtt_response;            // Set respond with rule processing only
   bool stop_flash_rotate;                   // Allow flash configuration rotation
   bool blinkstate;                          // LED state
   bool pwm_present;                         // Any PWM channel configured with SetOption15 0
-  bool i2c_enabled;                         // I2C configured
+  bool i2c_enabled[2];                      // I2C configured for all possible buses (1 or 2)
 #ifdef ESP32
-  bool i2c_enabled_2;                       // I2C configured, second controller on ESP32, Wire1
+  bool camera_initialized;                  // For esp32-webcam, to be used in discovery
   bool ota_factory;                         // Select safeboot binary
-#endif
+#endif  // ESP32
   bool ntp_force_sync;                      // Force NTP sync
   bool skip_light_fade;                     // Temporarily skip light fading
   bool restart_halt;                        // Do not restart but stay in wait loop
@@ -325,7 +329,8 @@ struct TasmotaGlobal_t {
   uint8_t busy_time;                        // Time in ms to allow executing of time critical functions
   uint8_t init_state;                       // Tasmota init state
   uint8_t heartbeat_inverted;               // Heartbeat pulse inverted flag
-  uint8_t spi_enabled;                      // SPI configured
+  uint8_t spi_enabled;                      // SPI configured (bus1)
+  uint8_t spi_enabled2;                     // SPI configured (bus2)
   uint8_t soft_spi_enabled;                 // Software SPI configured
   uint8_t blinks;                           // Number of LED blinks
   uint8_t restart_flag;                     // Tasmota restart flag
@@ -380,7 +385,7 @@ struct TasmotaGlobal_t {
 #ifdef USE_BERRY
   bool berry_fast_loop_enabled = false;     // is Berry fast loop enabled, i.e. control is passed at each loop iteration
 #endif  // USE_BERRY
-} TasmotaGlobal;
+} TasmotaGlobal = { 0 };
 
 TSettings* Settings = nullptr;
 
@@ -391,6 +396,11 @@ LList<char*> backlog;                       // Command backlog implemented with 
  * Main
 \*********************************************************************************************/
 
+#ifdef ESP32
+// IDF5.3 fix esp_gpio_reserve used in init PSRAM. Needed by Tasmota.ino esp_gpio_revoke
+#include "esp_private/esp_gpio_reserve.h"
+#endif  // ESP32
+
 void setup(void) {
 #ifdef ESP32
 #ifdef CONFIG_IDF_TARGET_ESP32
@@ -399,17 +409,29 @@ void setup(void) {
   DisableBrownout();      // Workaround possible weak LDO resulting in brownout detection during Wifi connection
 #endif  // DISABLE_ESP32_BROWNOUT
 
-  // restore GPIO16/17 if no PSRAM is found
+#ifndef FIRMWARE_SAFEBOOT
+#ifndef DISABLE_PSRAMCHECK
+#ifndef CORE32SOLO1
+  // restore GPIO5/18 or 16/17 if no PSRAM is found which may be used by Ethernet among others
   if (!FoundPSRAM()) {
     // test if the CPU is not pico
     uint32_t pkg_version = bootloader_common_get_chip_ver_pkg();
-    if (pkg_version <= 3) {   // D0WD, S0WD, D2WD
-      gpio_reset_pin(GPIO_NUM_16);
-      gpio_reset_pin(GPIO_NUM_17);
+    if (pkg_version <= 3) {         // D0WD, S0WD, D2WD
+      gpio_reset_pin((gpio_num_t)CONFIG_D0WD_PSRAM_CS_IO);
+      gpio_reset_pin((gpio_num_t)CONFIG_D0WD_PSRAM_CLK_IO);
+      // IDF5.3 fix esp_gpio_reserve used in init PSRAM
+      esp_gpio_revoke(BIT64(CONFIG_D0WD_PSRAM_CS_IO) | BIT64(CONFIG_D0WD_PSRAM_CLK_IO));
     }
   }
+#endif  // CORE32SOLO1
+#endif  // DISABLE_PSRAMCHECK
+#endif  // FIRMWARE_SAFEBOOT
 #endif  // CONFIG_IDF_TARGET_ESP32
 #endif  // ESP32
+
+#ifdef USE_ESP32_WDT
+  enableLoopWDT();          // enabled WDT Watchdog on Arduino `loop()` - must return before 5s or called `feedLoopWDT();` - included in `yield()`
+#endif // USE_ESP32_WDT
 
   RtcPreInit();
   SettingsInit();
@@ -418,7 +440,6 @@ void setup(void) {
   EmergencyReset();
 #endif  // USE_EMERGENCY_RESET
 
-  memset(&TasmotaGlobal, 0, sizeof(TasmotaGlobal));
   TasmotaGlobal.baudrate = APP_BAUDRATE;
   TasmotaGlobal.seriallog_timer = SERIALLOG_TIMER;
   TasmotaGlobal.temperature_celsius = NAN;
@@ -428,7 +449,7 @@ void setup(void) {
   TasmotaGlobal.active_device = 1;
   TasmotaGlobal.global_state.data = 0xF;  // Init global state (wifi_down, mqtt_down) to solve possible network issues
   TasmotaGlobal.maxlog_level = LOG_LEVEL_DEBUG_MORE;
-  TasmotaGlobal.seriallog_level = LOG_LEVEL_INFO;  // Allow specific serial messages until config loaded
+  TasmotaGlobal.seriallog_level = (SERIAL_LOG_LEVEL > LOG_LEVEL_INFO) ? SERIAL_LOG_LEVEL : LOG_LEVEL_INFO;  // Allow specific serial messages until config loaded and allow more logging than INFO
   TasmotaGlobal.power_latching = 0x80000000;
 
   RtcRebootLoad();
@@ -454,7 +475,7 @@ void setup(void) {
   // Init settings and logging preparing for AddLog use
 #ifdef PIO_FRAMEWORK_ARDUINO_MMU_CACHE16_IRAM48_SECHEAP_SHARED
   ESP.setIramHeap();
-  Settings = (TSettings*)malloc(sizeof(TSettings));             // Allocate in "new" 16k heap space
+  Settings = (TSettings*)calloc(1, sizeof(TSettings));          // Allocate in "new" 16k heap space
   TasmotaGlobal.log_buffer = (char*)malloc(LOG_BUFFER_SIZE);    // Allocate in "new" 16k heap space
   ESP.resetHeap();
   if (TasmotaGlobal.log_buffer == nullptr) {
@@ -465,7 +486,7 @@ void setup(void) {
   }
 #endif  // PIO_FRAMEWORK_ARDUINO_MMU_CACHE16_IRAM48_SECHEAP_SHARED
   if (Settings == nullptr) {
-    Settings = (TSettings*)malloc(sizeof(TSettings));
+    Settings = (TSettings*)calloc(1, sizeof(TSettings));
   }
 
 #ifdef ESP32
@@ -473,9 +494,9 @@ void setup(void) {
 #ifdef USE_USB_CDC_CONSOLE
 
   bool is_connected_to_USB = false;
-#if SOC_USB_SERIAL_JTAG_SUPPORTED  // Not S2
   TasConsole.setRxBufferSize(INPUT_BUFFER_SIZE);
-  TasConsole.begin(115200); // always start CDC to test plugged cable
+  TasConsole.begin(115200);           // always start CDC to test plugged cable
+#if SOC_USB_SERIAL_JTAG_SUPPORTED  // Not S2
   for (uint32_t i = 0; i < 5; i++) {  // wait up to 250 ms - maybe a shorter time is enough
       is_connected_to_USB = HWCDCSerial.isPlugged();
       if (is_connected_to_USB) { break; }
@@ -493,9 +514,9 @@ void setup(void) {
     TasConsole.println();
     AddLog(LOG_LEVEL_INFO, PSTR("CMD: Using USB CDC"));
   } else {
-    #if SOC_USB_SERIAL_JTAG_SUPPORTED  // Not S2
+#if SOC_USB_SERIAL_JTAG_SUPPORTED  // Not S2
     HWCDCSerial.~HWCDC();       // not needed, deinit CDC
-    #endif  // SOC_USB_SERIAL_JTAG_SUPPORTED
+#endif  // SOC_USB_SERIAL_JTAG_SUPPORTED
     // Init command serial console preparing for AddLog use
     Serial.begin(TasmotaGlobal.baudrate);
     Serial.println();
@@ -548,6 +569,7 @@ void setup(void) {
 
   SettingsLoad();
   SettingsDelta();
+  SettingsMinimum();                           // Set life-saving parameters if out-of-range due to reconfig Settings Area
 
   OsWatchInit();
 
@@ -705,6 +727,7 @@ void BacklogLoop(void) {
           free(cmd);
           nodelay = true;
         } else {
+          TasmotaGlobal.no_mqtt_response = TasmotaGlobal.backlog_no_mqtt_response;
           ExecuteCommand(cmd, SRC_BACKLOG);
           free(cmd);
           if (nodelay || TasmotaGlobal.backlog_nodelay) {
@@ -713,23 +736,6 @@ void BacklogLoop(void) {
           break;
         }
       } while (!BACKLOG_EMPTY);
-/*
-      // This adds 96 bytes
-      for (auto &cmd : backlog) {
-        backlog.remove(&cmd);
-        if (!strncasecmp_P(cmd, PSTR(D_CMND_NODELAY), strlen(D_CMND_NODELAY))) {
-          free(cmd);
-          nodelay = true;
-        } else {
-          ExecuteCommand(cmd, SRC_BACKLOG);
-          free(cmd);
-          if (nodelay || TasmotaGlobal.backlog_nodelay) {
-            TasmotaGlobal.backlog_timer = millis();  // Reset backlog_timer which has been set by ExecuteCommand (CommandHandler)
-          }
-          break;
-        }
-      }
-*/
       TasmotaGlobal.backlog_mutex = false;
     }
     if (BACKLOG_EMPTY) {

@@ -21,6 +21,7 @@ class debug_panel
   var port
   var web
   var sampling_interval
+  var p1
 
   static var SAMPLING = 100
   static var HTML_HEAD1 = 
@@ -68,9 +69,12 @@ class debug_panel
     "</body></html>"
   
   def init(port)
+    if (port == nil)  port = 8887   end
     self.port = port
     self.web = webserver_async(port)
     self.sampling_interval = self.SAMPLING
+
+    self.p1 = bytes(100)
 
     self.web.set_chunked(true)
     self.web.set_cors(true)
@@ -107,9 +111,11 @@ class debug_panel
   end
   
   static class feeder
+    var app                                   # overarching app (debug_panel)
     var cnx                                   # connection object
 
-    def init(cnx)
+    def init(app, cnx)
+      self.app = app
       self.cnx = cnx
       tasmota.add_driver(self)
     end
@@ -129,8 +135,7 @@ class debug_panel
         return
       end
 
-      var payload1 = self.cnx.server.payload1
-      var payload2 = self.cnx.server.payload2
+      var payload1 = self.app.p1
       var server = self.cnx.server
       if cnx.buf_out_empty()
         # if out buffer is not empty, do not send any new information
@@ -138,11 +143,9 @@ class debug_panel
         # send free heap
         payload1.clear()
         payload1 .. "id:"
-        server.bytes_format_int(payload2, tasmota.millis())
-        payload1 .. payload2
+        server.bytes_append_int(payload1, tasmota.millis())
         payload1 .. "\r\nevent:free_heap\r\ndata:"
-        server.bytes_format_int(payload2, tasmota.memory('heap_free'), '---')
-        payload1 .. payload2
+        server.bytes_append_int(payload1, tasmota.memory('heap_free'), '---')
         payload1 .. " KB\r\n\r\n"
         # payload = f"id:{tasmota.millis()}\r\n"
         #           "event:free_heap\r\n"
@@ -152,11 +155,9 @@ class debug_panel
         # send wifi rssi
         payload1.clear()
         payload1 .. "id:"
-        server.bytes_format_int(payload2, tasmota.millis())
-        payload1 .. payload2
+        server.bytes_append_int(payload1, tasmota.millis())
         payload1 .. "\r\nevent:wifi_rssi\r\ndata:"
-        server.bytes_format_int(payload2, tasmota.wifi('quality'), '--')
-        payload1 .. payload2
+        server.bytes_append_int(payload1, tasmota.wifi('quality'), '--')
         payload1 .. "%\r\n\r\n"
 
         # payload = f"id:{tasmota.millis()}\r\n"
@@ -172,7 +173,7 @@ class debug_panel
     cnx.set_chunked(false)     # no chunking since we use EventSource
     cnx.send(200, "text/event-stream")
     #
-    var feed = feeder(cnx)
+    var feed = feeder(self, cnx)
     feed.send_feed()          # send first values immediately
   end
 
@@ -213,7 +214,7 @@ end
 return debug_panel
 
 # if tasmota
-#   global.debug_panel = Debug_panel(8887)
+#   global.debug_panel = debug_panel(8887)
 # end
 
 # return global.debug_panel

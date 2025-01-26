@@ -22,6 +22,7 @@
 
 #include <renderer.h>
 #include "lvgl.h"
+#include "core/lv_global.h"         // needed for LV_GLOBAL_DEFAULT
 #include "tasmota_lvgl_assets.h"    // force compilation of assets
 
 #define XDRV_54             54
@@ -68,6 +69,7 @@ void lv_flush_callback(lv_display_t *disp, const lv_area_t *area, uint8_t *color
   if (lvgl_glue->screenshot != nullptr) {
     // save pixels to file
     int32_t btw = (width * height * LV_COLOR_DEPTH + 7) / 8;
+    yield();            // ensure WDT does not fire
     while (btw > 0) {
       if (btw > 0) {    // if we had a previous error (ex disk full) don't try to write anymore
         int32_t ret = lvgl_glue->screenshot->write((const uint8_t*) color_p, btw);
@@ -87,6 +89,7 @@ void lv_flush_callback(lv_display_t *disp, const lv_area_t *area, uint8_t *color
   renderer->setAddrWindow(area->x1, area->y1, area->x1+width, area->y1+height);
   renderer->pushColors((uint16_t *)color_p, pixels_len, true);
   renderer->setAddrWindow(0,0,0,0);
+  renderer->Updateframe();
   uint32_t chrono_time = millis() - chrono_start;
 
   lv_disp_flush_ready(disp);
@@ -136,12 +139,12 @@ extern "C" {
   }
 
   // int fclose ( FILE * stream );
-  int lvbe_fclose(lvbe_FILE * stream) {
+  lv_fs_res_t lvbe_fclose(lvbe_FILE * stream) {
     File * f_ptr = (File*) stream;
     f_ptr->close();
     delete f_ptr;
     // AddLog(LOG_LEVEL_INFO, "LVG: lvbe_fclose(%p)", f_ptr);
-    return 0;
+    return LV_FS_RES_OK;
   }
 
   // size_t fread ( void * ptr, size_t size, size_t count, FILE * stream );
@@ -371,7 +374,7 @@ void start_lvgl(const char * uconfig);
 void start_lvgl(const char * uconfig) {
 
   if (lvgl_glue != nullptr) {
-    AddLog(LOG_LEVEL_DEBUG, D_LOG_LVGL "LVGL was already initialized");
+    AddLog(LOG_LEVEL_DEBUG_MORE, D_LOG_LVGL "LVGL was already initialized");
     return;
   }
 

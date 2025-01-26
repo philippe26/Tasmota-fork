@@ -86,7 +86,7 @@ In addition to @arendst the following code is mainly owned by:
 | xdrv_72_pipsolar             | @chefpro
 | xdrv_73_lora                 | @arendst
 | xdrv_74                      |
-| xdrv_75                      |
+| xdrv_75_dali                 | @eeak, @arendst
 | xdrv_76                      |
 | xdrv_77                      |
 | xdrv_78                      |
@@ -98,7 +98,7 @@ In addition to @arendst the following code is mainly owned by:
 | xdrv_86_esp32_sonoff_spm     | @arendst
 | xdrv_87_esp32_sonoff_tm1621  | @arendst
 | xdrv_88_esp32_shelly_pro     | @arendst
-| xdrv_89_esp32_dali           | @eeak
+| xdrv_89_                     |
 | xdrv_90_esp32_dingtian_relay | @barbudor
 | xdrv_91_                     |
 | xdrv_92_                     |
@@ -139,7 +139,7 @@ In addition to @arendst the following code is mainly owned by:
 | xsns_25_spl06-007_sensor     | @rai68
 | xsns_26_lm75ad               | Andre Thomas
 | xsns_27_apds9960             | Shawn Hymel
-| xsns_28                      |
+| xsns_28_qmp6988              | @arendst
 | xsns_29_mcp230xx             | Andre Thomas
 | xsns_30_mpr121               | Rene 'Renne' Bartsch
 | xsns_31_ccs811               | Gerhard Mutz
@@ -229,6 +229,7 @@ In addition to @arendst the following code is mainly owned by:
 | xsns_112_ens210              | Christoph Friese
 | xsns_113_hc8                 | Daniel Maier
 | xsns_114_amsx915             | Bastian Urschel
+| xsns_115_wooliis             | Luca Melette
 |                              |
 | xsns_127_esp32_sensors       | @arendst
 |                              |

@@ -8,7 +8,7 @@ Note: the `minimal` variant is not listed as it shouldn't be used outside of the
 | ------------------------- | ----- | ----- | ----- | ----- | ----- | ----- | --------------------------- |
 | MY_LANGUAGE en_GB         | x     | x / x | x     | x     | x     | x     |
 | USE_IMPROV                | x     | x / x | x     | x     | x     | x     |
-| USE_UFILESYS              | -     | - / x | -     | -     | -     | -     |
+| USE_UFILESYS              | -     | - / x | -     | -     | -     | -     | Every ESP8266 > 1MB         |
 | USE_ARDUINO_OTA           | -     | - / - | -     | -     | -     | -     |
 | USE_DOMOTICZ              | -     | x / x | x     | x     | x     | -     |
 | USE_HOME_ASSISTANT        | -     | - / - | -     | -     | -     | -     |
@@ -30,11 +30,14 @@ Note: the `minimal` variant is not listed as it shouldn't be used outside of the
 | USE_SUNRISE               | x     | x / x | x     | x     | x     | x     |
 | USE_RULES                 | x     | x / x | x     | x     | x     | x     |
 | USE_SCRIPT                | -     | - / - | -     | -     | -     | -     |
-| USE_EXPRESSION            | -     | - / x | -     | -     | -     | -     | Every ESP32 + ESP8266 > 1MB |
-| SUPPORT_IF_STATEMENT      | -     | - / x | -     | -     | -     | -     | Every ESP32 + ESP8266 > 1MB |
+| USE_EXPRESSION            | -     | x / x | -     | -     | -     | -     |
+| SUPPORT_IF_STATEMENT      | -     | x / x | -     | -     | -     | -     |
 | USE_HOTPLUG               | -     | - / - | -     | -     | -     | -     |
 | USE_PROMETHEUS            | -     | - / - | -     | -     | -     | -     |
 | USE_PING                  | -     | - / - | -     | -     | -     | -     |
+| USE_HDMI_CEC              | -     | - / - | -     | -     | -     | -     |
+| USE_MAGIC_SWITCH          | -     | - / x | -     | -     | -     | -     |
+| USE_GPIO_VIEWER           | -     | - / x | -     | -     | -     | -     |
 |                           |       |       |       |       |       |       |
 | **Feature or Sensor**     | **l** | **t** | **k** | **s** | **i** | **d** | **Remarks**                 |
 | ROTARY_V1                 | -     | x / x | -     | x     | -     | -     |
@@ -101,10 +104,19 @@ Note: the `minimal` variant is not listed as it shouldn't be used outside of the
 |                           |       |       |       |       |       |       |
 | **Feature or Sensor**     | **l** | **t** | **k** | **s** | **i** | **d** | **Remarks**                 |
 | USE_I2C                   | -     | x / x | x     | x     | -     | x     |
+| USE_RTC_CHIPS             | -     | - / x | -     | -     | -     | -     |
+| -USE_BM8563               | -     | - / x | -     | -     | -     | -     |
+| -USE_DS3231               | -     | - / - | -     | -     | -     | -     |
+| -USE_PCF85063             | -     | - / - | -     | -     | -     | -     |
+| -USE_PCF85363             | -     | - / - | -     | -     | -     | -     |
+| -USE_RX8010               | -     | - / - | -     | -     | -     | -     |
 | USE_SHT                   | -     | - / x | -     | x     | -     | -     |
 | USE_HTU                   | -     | - / x | -     | x     | -     | -     |
 | USE_BMP                   | -     | - / x | -     | x     | -     | -     |
-| USE_BME68X                | -     | - / x | -     | x     | -     | -     |
+| -USE_BME68X               | -     | - / x | -     | x     | -     | -     |
+| USE_AMSX915               | -     | - / - | -     | -     | -     | -     |
+| USE_SPL06_007             | -     | - / - | -     | -     | -     | -     |
+| USE_QMP6988               | -     | - / - | -     | -     | -     | -     |
 | USE_BH1750                | -     | - / x | -     | x     | -     | -     |
 | USE_VEML6070              | -     | - / x | -     | x     | -     | -     |
 | USE_ADS1115               | -     | - / x | -     | x     | -     | -     |
@@ -133,7 +145,6 @@ Note: the `minimal` variant is not listed as it shouldn't be used outside of the
 | USE_ENS16x                | -     | - / - | -     | -     | -     | -     |
 | USE_ENS210                | -     | - / - | -     | -     | -     | -     |
 | USE_MPU6050               | -     | - / - | -     | -     | -     | -     |
-| USE_DS3231                | -     | - / - | -     | -     | -     | -     |
 | USE_MGC3130               | -     | - / - | -     | -     | -     | -     |
 | USE_MAX44009              | -     | - / - | -     | -     | -     | -     |
 | USE_SCD30                 | -     | - / x | -     | x     | -     | -     |
@@ -181,22 +192,22 @@ Note: the `minimal` variant is not listed as it shouldn't be used outside of the
 | USE_EZORTD                | -     | - / - | -     | -     | -     | -     |
 | USE_SEESAW_SOIL           | -     | - / - | -     | -     | -     | -     |
 | USE_TOF10120              | -     | - / - | -     | -     | -     | -     |
-| USE_BM8563                | -     | - / - | -     | -     | -     | -     |
 | USE_AM2320                | -     | - / - | -     | -     | -     | -     |
 | USE_T67XX                 | -     | - / - | -     | -     | -     | -     |
 | USE_HM330X                | -     | - / - | -     | -     | -     | -     |
 | USE_HDC2010               | -     | - / - | -     | -     | -     | -     |
-| USE_PCF85363              | -     | - / - | -     | -     | -     | -     |
 | USE_DS3502                | -     | - / - | -     | -     | -     | -     |
 | USE_HYT                   | -     | - / - | -     | -     | -     | -     |
 | USE_LUXV30B               | -     | - / - | -     | -     | -     | -     |
 | USE_HMC5883L              | -     | - / - | -     | -     | -     | -     |
 | USE_QMC5883L              | -     | - / - | -     | -     | -     | -     |
+| USE_MAX17043              | -     | - / - | -     | -     | -     | -     |
 |                           |       |       |       |       |       |       |
 | **Feature or Sensor**     | **l** | **t** | **k** | **s** | **i** | **d** | **Remarks**                 |
-| USE_SPI                   | -     | - / - | -     | -     | -     | x     |
+| USE_SPI                   | -     | - / x | -     | -     | -     | x     |
 | USE_RC522                 | -     | - / - | -     | -     | -     | -     |
 | USE_CANSNIFFER            | -     | - / - | -     | -     | -     | -     |
+| USE_SPI_LORA              | -     | - / x | -     | -     | -     | -     |
 | USE_MHZ19                 | -     | - / x | -     | x     | -     | -     |
 | USE_SENSEAIR              | -     | - / x | -     | x     | -     | -     |
 | USE_PMS5003               | -     | - / x | -     | x     | -     | -     |
@@ -220,6 +231,9 @@ Note: the `minimal` variant is not listed as it shouldn't be used outside of the
 | USE_LD2410                | -     | - / - | -     | -     | -     | -     |
 | USE_GM861                 | -     | - / - | -     | -     | -     | -     |
 | USE_TCP_BRIDGE            | -     | - / - | -     | -     | -     | -     | zbbridge / zbbrdgpro        |
+| USE_HC8                   | -     | - / - | -     | -     | -     | -     |
+| USE_PIPSOLAR              | -     | - / - | -     | -     | -     | -     |
+| USE_WOOLIIS               | -     | - / - | -     | -     | -     | -     |
 |                           |       |       |       |       |       |       |
 | USE_NRF24                 | -     | - / - | -     | -     | -     | -     |
 | USE_MIBLE                 | -     | - / - | -     | -     | -     | -     |
@@ -236,6 +250,7 @@ Note: the `minimal` variant is not listed as it shouldn't be used outside of the
 | USE_DYP                   | -     | - / - | -     | -     | -     | -     |
 | USE_TM1638                | -     | - / x | -     | x     | -     | -     |
 | USE_HX711                 | -     | - / x | -     | x     | -     | -     |
+| -USE_HX711_M5SCALES       | -     | - / - | -     | -     | -     | -     |
 | USE_TX2x_WIND_SENSOR      | -     | - / - | -     | -     | -     | -     |
 | USE_WINDMETER             | -     | - / - | -     | -     | -     | -     |
 | USE_RC_SWITCH             | -     | - / x | -     | x     | -     | -     |
@@ -267,11 +282,11 @@ Note: the `minimal` variant is not listed as it shouldn't be used outside of the
 | USE_WEBCAM                |       | / -   |       |       |       |       |
 | USE_ETHERNET              |       | / x   |       |       |       |       |
 | USE_I2S_AUDIO             |       | / -   |       |       |       |       |
-| USE_TTGO_WATCH            |       | / -   |       |       |       |       |
 | USE_SONOFF_SPM            |       | / x   |       |       |       |       |
 | USE_DISPLAY_TM1621_SONOFF |       | / x   |       |       |       |       |
 | USE_SHELLY_PRO            |       | / x   |       |       |       |       |
-| USE_DALI                  |       | / -   |       |       |       |       |
+| USE_ESP32_TWAI            |       | / x   |       |       |       |       |
+| USE_DALI                  |       | / x   |       |       |       |       |
 | USE_DINGTIAN_RELAY        |       | / -   |       |       |       |       |
 | USE_MATTER_DEVICE         |       | / x   |       |       |       |       | See SetOption151            |
 

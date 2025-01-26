@@ -14,14 +14,11 @@
       "bluetooth"
     ],
     "debug": {
-      "default_tool": "esp-builtin",
-      "onboard_tools": [
-        "esp-builtin"
-      ],
       "openocd_target": "esp32c6.cfg"
     },
     "frameworks": [
-      "arduino"
+      "arduino",
+      "espidf"
     ],
     "name": "Espressif Generic ESP32-C6 >= 4M Flash, Tasmota 2880k Code/OTA, 320k FS",
     "upload": {

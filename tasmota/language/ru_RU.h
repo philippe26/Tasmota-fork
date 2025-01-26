@@ -57,6 +57,7 @@
 #define D_AIR_QUALITY "Качество воздуха"
 #define D_AP "AP"                    // Access Point
 #define D_AS "как"
+#define D_AT "at"
 #define D_AUTO "АВТО"
 #define D_BATTERY "Battery"
 #define D_BATT "Batt"                // Short for Battery
@@ -77,6 +78,7 @@
 #define D_COMMAND "Команда"
 #define D_CONNECTED "Соединен"
 #define D_CORS_DOMAIN "Домен CORS"
+#define D_COLOR "Color"
 #define D_COUNT "Подсчет"
 #define D_COUNTER "Счетчик"
 #define D_CT_POWER "CT Power"
@@ -87,9 +89,6 @@
 #define D_DEBUG "Отладка"
 #define D_DEWPOINT "Dew point"
 #define D_DISABLED "Блокирован"
-#define D_MOVING_DISTANCE "Moving Distance"
-#define D_STATIC_DISTANCE "Static Distance"
-#define D_DETECT_DISTANCE "Detect Distance"
 #define D_DISTANCE "Расстояние"
 #define D_DNS_SERVER "DNS Сервер"
 #define D_DO "Disolved Oxygen"
@@ -218,6 +217,7 @@
 #define D_WEB_SERVER "Веб-сервер"
 #define D_SOC "State of Charge"
 #define D_SOH "State of Health"
+#define D_WATER_DEPTH "Глубина воды"
 
 // tasmota.ino
 #define D_WARNING_MINIMAL_VERSION "ПРЕДУПРЕЖДЕНИЕ Эта версия не поддерживает персистентные настройки"
@@ -572,6 +572,14 @@
 #define D_THERMOSTAT_PI_HYBRID        "PI (Hybrid)"
 #define D_THERMOSTAT_AUTOTUNE_HYBRID  "Autotune (Hybrid)"
 
+// xdrv_79_esp32_ble.ino
+#define D_CONFIGURE_BLE "Configure BLE"
+#define D_BLE_PARAMETERS "Bluetooth Settings"
+#define D_BLE_ENABLE "Enable Bluetooth"
+#define D_BLE_ACTIVESCAN "Enable Active Scan(*)"
+#define D_BLE_DEVICES "Devices Seen"
+#define D_BLE_REMARK "items marked (*) are not stored in config"
+
 // xsns_05_ds18b20.ino
 #define D_SENSOR_BUSY "Датчик DS18x20 занят"
 #define D_SENSOR_CRC_ERROR "Датчик DS18x20 - ошибка CRC"
@@ -664,6 +672,24 @@
 #define D_SIGNALSTRENGTH "Сила сигнала"
 #define D_CHIPTEMPERATURE "Температура чипа"
 
+// xsns_60_GPS
+#define D_LATITUDE             "Latitude"
+#define D_LONGITUDE            "Longitude"
+#define D_HORIZONTAL_ACCURACY  "Horizontal Accuracy"
+#define D_ALTITUDE             "Altitude"
+#define D_VERTICAL_ACCURACY    "Vertical Accuracy"
+#define D_SPEED                "Speed"
+#define D_SPEED_ACCURACY       "Speed Accuracy"
+#define D_HEADING              "Heading"
+#define D_HEADING_ACCURACY     "Heading Accuracy"
+#define D_SAT_FIX              "Satellite Fix"
+  #define D_SAT_FIX_NO_FIX     "None"
+  #define D_SAT_FIX_DEAD_RECK  "Dead reckoning"
+  #define D_SAT_FIX_2D         "2D"
+  #define D_SAT_FIX_3D         "3D"
+  #define D_SAT_FIX_GPS_DEAD   "GPS and dead reckoning"
+  #define D_SAT_FIX_TIME       "Time only fix"
+
 // tasmota_template.h - keep them as short as possible to be able to fit them in GUI drop down box
 #define D_SENSOR_NONE          "-нет-"
 #define D_SENSOR_USER          "User"
@@ -675,6 +701,8 @@
 #define D_SENSOR_DS18X20       "DS18x20"
 #define D_SENSOR_I2C_SCL       "I2C SCL"
 #define D_SENSOR_I2C_SDA       "I2C SDA"
+#define D_SENSOR_I2C_SER_TX    "I2C Ser TX"
+#define D_SENSOR_I2C_SER_RX    "I2C Ser RX"
 #define D_SENSOR_I2S_MCLK      "I2S MCLK"
 #define D_SENSOR_I2S_BCLK      "I2S BCLK"
 #define D_SENSOR_I2S_WS_IN     "I2S BCLK IN"
@@ -751,6 +779,8 @@
 #define D_SENSOR_WE517_RX      "WE517 Rx"
 #define D_SENSOR_LD2410_TX     "LD2410 Tx"
 #define D_SENSOR_LD2410_RX     "LD2410 Rx"
+#define D_SENSOR_LD2410S_TX     "LD2410S Tx"
+#define D_SENSOR_LD2410S_RX     "LD2410S Rx"
 #define D_GPIO_TM1621_CS       "TM1621 CS"
 #define D_GPIO_TM1621_WR       "TM1621 WR"
 #define D_GPIO_TM1621_RD       "TM1621 RD"
@@ -760,6 +790,8 @@
 #define D_SENSOR_TM1638_CLK    "TM1638 CLK"
 #define D_SENSOR_TM1638_DIO    "TM1638 DIO"
 #define D_SENSOR_TM1638_STB    "TM1638 STB"
+#define D_SENSOR_TM1640_CLK    "TM1640 CLK"
+#define D_SENSOR_TM1640_DIN    "TM1640 DIN"
 #define D_SENSOR_MAX7219_DIN    "MAX7219 DIN"
 #define D_SENSOR_MAX7219_CS    "MAX7219 CS"
 #define D_SENSOR_MAX7219_CLK    "MAX7219 CLK"
@@ -790,6 +822,8 @@
 #define D_GPIO_RN2XX3_TX       "RN2XX3 Tx"
 #define D_GPIO_RN2XX3_RX       "RN2XX3 Rx"
 #define D_GPIO_RN2XX3_RST      "RN2XX3 Rst"
+#define D_GPIO_ASR650X_TX      "ASR650x Tx"
+#define D_GPIO_ASR650X_RX      "ASR650x Rx"
 #define D_GPIO_LORA_CS         "LoRa CS"
 #define D_GPIO_LORA_RST        "LoRa Rst"
 #define D_GPIO_LORA_BUSY       "LoRa Busy"
@@ -805,6 +839,7 @@
 #define D_SENSOR_CSE7761_RX    "CSE7761 Rx"
 #define D_SENSOR_CSE7766_TX    "CSE7766 Tx"
 #define D_SENSOR_CSE7766_RX    "CSE7766 Rx"
+#define D_SENSOR_BL0906_RX     "BL0906 Rx"
 #define D_SENSOR_BL0939_RX     "BL0939 Rx"
 #define D_SENSOR_BL0942_RX     "BL0942 Rx"
 #define D_SENSOR_HM330X_SET    "HM330X SET"
@@ -893,6 +928,8 @@
 #define D_SENSOR_ADC_JOYSTICK  "ADC Joystick"
 #define D_SENSOR_ADC_PH        "ADC pH"
 #define D_SENSOR_ADC_MQ        "ADC MQ"
+#define D_SENSOR_ADC_VOLTAGE   "ADC Voltage"
+#define D_SENSOR_ADC_CURRENT   "ADC Current"
 #define D_GPIO_WEBCAM_PWDN     "CAM_PWDN"
 #define D_GPIO_WEBCAM_RESET    "CAM_RESET"
 #define D_GPIO_WEBCAM_XCLK     "CAM_XCLK"
@@ -975,11 +1012,16 @@
 #define D_SENSOR_ME007_RX      "ME007 Rx"
 #define D_SENSOR_TUYAMCUBR_TX  "TuyaMCUBr Tx"
 #define D_SENSOR_TUYAMCUBR_RX  "TuyaMCUBr Rx"
+#define D_SENSOR_TWAI_TX       "TWAI Tx"
+#define D_SENSOR_TWAI_RX       "TWAI Rx"
+#define D_SENSOR_TWAI_BO       "TWAI BusOff"
+#define D_SENSOR_TWAI_CLK      "TWAI ClkOut"
 #define D_SENSOR_BIOPDU_PZEM0XX_TX "BioPDU PZEM0XX Tx"
 #define D_SENSOR_BIOPDU_PZEM016_RX "BioPDU PZEM016 Rx"
 #define D_SENSOR_BIOPDU_BIT    "BioPDU Bit"
 #define D_SENSOR_LOX_O2_RX     "LoxO2 RX"
-#define D_GPIO_MAGIC_SWITCH "MagicSwitch"
+#define D_GPIO_MAGIC_SWITCH    "MagicSwitch"
+#define D_SENSOR_WOOLIIS_RX    "Wooliis Rx"
 
 // Units
 #define D_UNIT_AMPERE "А"
@@ -1004,6 +1046,7 @@
 #define D_UNIT_LITERS "л"
 #define D_UNIT_LITERS_PER_MIN "л/мин"
 #define D_UNIT_LUX "лк"
+#define D_UNIT_METER "m"
 #define D_UNIT_MICROGRAM_PER_CUBIC_METER "мкг/м³"
 #define D_UNIT_MICROMETER "мкм"
 #define D_UNIT_MICROSECOND "мкс"
@@ -1174,6 +1217,13 @@
 #define D_FP_PASSVERIFY "Password verified"    // 0x21 Verify the fingerprint passed
 #define D_FP_UNKNOWNERROR "Error"              // Any other error
 
+// xsns_90_hrg15.ino
+#define D_HRG_VALID "Valid"
+#define D_HRG_ACTIVE "Active"
+#define D_HRG_EVENT "Event"
+#define D_HRG_TOTAL "Total"
+#define D_HRG_FLOWRATE "Flow Rate"
+
 // xsns_96_flowratemeter.ino
 #define D_FLOWRATEMETER_NAME "Flowrate"
 #define D_FLOWRATEMETER_AMOUNT_TODAY "Amount Today"
@@ -1247,5 +1297,20 @@
 // ixrv92_pipsolar.ino
 #define D_SENSOR_PIPSOLAR_TX             "Pipsolar TX"
 #define D_SENSOR_PIPSOLAR_RX             "Pipsolar RX"
+
+// xsns_102_ld2410.ino
+#define D_MOVING_DISTANCE "Moving Distance"
+#define D_STATIC_DISTANCE "Static Distance"
+#define D_DETECT_DISTANCE "Detect Distance"
+#define D_MOVING_ENERGY_T "Moving target"
+#define D_STATIC_ENERGY_T "Static target"
+#define D_LD2410_PIN_STATE "Output pin state"
+#define D_LD2410_LIGHT "Light sensor"
+
+// xsns_115_wooliis.ino
+#define D_IMPORT                          "Import"
+#define D_EXPORT                          "Export"
+#define D_CHARGING                        "Charging"
+#define D_CAPACITY                        "Capacity"
 
 #endif  // _LANGUAGE_RU_RU_H_

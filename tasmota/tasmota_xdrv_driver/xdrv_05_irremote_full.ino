@@ -375,7 +375,11 @@ void IrReceiveCheck(void) {
       }
 
       ResponseJsonEndEnd();
-      MqttPublishPrefixTopicRulesProcess_P(RESULT_OR_TELE, PSTR(D_JSON_IRRECEIVED));
+      if (Settings->flag6.mqtt_disable_publish ) {  // SetOption147 - If it is activated, Tasmota will not publish IRReceived MQTT messages, but it will proccess event trigger rules
+        XdrvRulesProcess(0);
+      } else {
+        MqttPublishPrefixTopicRulesProcess_P(RESULT_OR_TELE, PSTR(D_JSON_IRRECEIVED));
+      }
     }
 
     irrecv->resume();
@@ -654,7 +658,7 @@ uint32_t IrRemoteCmndIrSendJson(void)
     }
 
     uint8_t data_bytes[num_bytes];        // allocate on stack since it's small enough
-    if (HexToBytes(data_hex, data_bytes, &num_bytes) <= 0) { return IE_INVALID_HEXDATA; }
+    if (HexToBytes(data_hex, data_bytes, num_bytes) <= 0) { return IE_INVALID_HEXDATA; }
 
     if (lsb) {
       reverseBits(data_bytes, bits);

@@ -78,7 +78,7 @@
 #ifdef USE_BLE_ESP32
 
 #ifdef ESP32                       // ESP32 family only. Use define USE_HM10 for ESP8266 support
-#if CONFIG_IDF_TARGET_ESP32 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32S3
+#if CONFIG_IDF_TARGET_ESP32 || CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32S3
 
 #ifdef USE_MI_ESP32
 
@@ -792,7 +792,7 @@ int genericSensorReadFn(int slot, int force){
       break;*/
     case MI_LYWSD03MMC:
       // don't read if key present and we've decoded at least one advert
-      if (MIBLEsensors[slot].needkey == KEY_REQUIRED_AND_FOUND && !force) return -2;
+      if ((MIBLEsensors[slot].needkey == KEY_NOT_REQUIRED || MIBLEsensors[slot].needkey == KEY_REQUIRED_AND_FOUND) && !force) return -2;
       res = MI32Operation(slot, OP_READ_HT_LY, LYWSD03_Svc, nullptr, LYWSD03_BattNotifyChar);
       break;
     case MI_LYWSD02MMC:
@@ -800,7 +800,7 @@ int genericSensorReadFn(int slot, int force){
       break;
     case MI_MHOC401:
       // don't read if key present and we've decoded at least one advert
-      if (MIBLEsensors[slot].needkey == KEY_REQUIRED_AND_FOUND && !force) return -2;
+      if ((MIBLEsensors[slot].needkey == KEY_NOT_REQUIRED || MIBLEsensors[slot].needkey == KEY_REQUIRED_AND_FOUND) && !force) return -2;
       res = MI32Operation(slot, OP_READ_HT_LY, MHOC401_Svc, nullptr, MHOC401_BattNotifyChar);
       break;
 
@@ -2611,8 +2611,7 @@ void CmndMi32Option(void){
       }
     } break;
     default:{
-      ResponseCmndIdxError();
-      return;
+      return;  // Command Error
     } break;
   }
   ResponseCmndIdxNumber(value);
@@ -2789,7 +2788,7 @@ void HandleMI32Key(){
 
   WSContentSend_P(HTTP_KEY_ADDED, mac, key);
 
-  strncat(key, mac, sizeof(key));
+  strcat(key, mac);
   MI32AddKey(key, nullptr);
 
 //  WSContentSpaceButton(BUTTON_CONFIGURATION);
@@ -3527,7 +3526,7 @@ void MI32Show(bool json)
       const char *typeName = kMI32DeviceType[p->type-1];
       const char *alias = BLE_ESP32::getAlias(p->MAC);
       if (alias && *alias){
-        WSContentSend_PD(HTTP_MI32_ALIAS, typeName, alias);
+        WSContentSend_P(HTTP_MI32_ALIAS, typeName, alias);
       }
       char _MAC[18];
       ToHex_P(p->MAC,6,_MAC,18);//,':');

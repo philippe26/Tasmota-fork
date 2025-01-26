@@ -59,7 +59,7 @@ typedef enum WiFiPhyMode
 class WiFiHelper {
 public:
 #ifdef ESP32
-  static wl_status_t begin(const char* wpa2_ssid, wpa2_auth_method_t method, const char* wpa2_identity=NULL, const char* wpa2_username=NULL, const char *wpa2_password=NULL, const char* ca_pem=NULL, const char* client_crt=NULL, const char* client_key=NULL, int32_t channel=0, const uint8_t* bssid=0, bool connect=true);
+  static wl_status_t begin(const char* wpa2_ssid, wpa2_auth_method_t method, const char* wpa2_identity=NULL, const char* wpa2_username=NULL, const char *wpa2_password=NULL, const char* ca_pem=NULL, const char* client_crt=NULL, const char* client_key=NULL, int ttls_phase2_type=-1, int32_t channel=0, const uint8_t* bssid=0, bool connect=true);
 #endif
   static wl_status_t begin(const char* ssid, const char *passphrase = NULL, int32_t channel = 0, const uint8_t* bssid = NULL, bool connect = true);
   static wl_status_t begin(char* ssid, char *passphrase = NULL, int32_t channel = 0, const uint8_t* bssid = NULL, bool connect = true);
@@ -83,6 +83,13 @@ public:
   // With ESP32 Core3, the WiFi mac address is not valid until the wifi is actually started
   // this helper function always provide a valid mac address
   static String macAddress(void);
+
+  // Auto-fix zone
+  //
+  // After a reconnect, the zone id may not be valid anymore
+  // In such case we detect any "%st<n>" or "%en<n>" zone identifier
+  // and replace with the current zone id
+  static void IPv6ZoneAutoFix(IPAddress &addr, const char* aHostname);
 };
 
 

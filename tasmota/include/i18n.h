@@ -46,7 +46,9 @@
 #define D_JSON_BSSID "BSSId"
 #define D_JSON_BUTTON "Button"
 #define D_JSON_BUILDDATETIME "BuildDateTime"
+#define D_JSON_CAPACITY "Capacity"
 #define D_JSON_CHANNEL "Channel"
+#define D_JSON_CHARGING "Charging"
 #define D_JSON_CO2 "CarbonDioxide"
 #define D_JSON_CODINGRATE4 "CodingRate4"
 #define D_JSON_COMMAND "Command"
@@ -213,10 +215,12 @@
 #define D_JSON_UV_INDEX_TEXT "UvIndexText"
 #define D_JSON_UV_LEVEL "UvLevel"
 #define D_JSON_UV_POWER "UvPower"
+#define D_JSON_VALID "Valid"
 #define D_JSON_VCC "Vcc"
 #define D_JSON_VERSION "Version"
 #define D_JSON_VOLTAGE "Voltage"
 #define D_JSON_VOLUME "Volume"
+#define D_JSON_WATER_DEPTH "Water Depth"
 #define D_JSON_WEIGHT "Weight"
 #define D_JSON_WIFI "Wifi"
 #define D_JSON_WIFI_MODE "Mode"
@@ -328,6 +332,7 @@
 #define D_CMND_OTAURL "OtaUrl"
 #define D_CMND_SERIALLOG "SerialLog"
 #define D_CMND_SYSLOG "SysLog"
+#define D_CMND_FILELOG "FileLog"
 #define D_CMND_LOGHOST "LogHost"
 #define D_CMND_LOGPORT "LogPort"
 #define D_CMND_IPADDRESS "IPAddress"
@@ -461,6 +466,7 @@
 #define D_CMND_WEBTIME "WebTime"
 #define D_CMND_WEBSENSOR "WebSensor"
 #define D_CMND_WEBGETCONFIG "WebGetConfig"
+#define D_CMND_WEBRUN "WebRun"
 #define D_CMND_EMULATION "Emulation"
 #define D_CMND_SENDMAIL "Sendmail"
 #define D_CMND_CORS "CORS"
@@ -526,6 +532,7 @@
 #define D_CMND_PALETTE "Palette"
 #define D_CMND_PIXELS "Pixels"
 #define D_CMND_STEPPIXELS "StepPixels"
+#define D_CMND_PIXELTYPE "PixelType"
 #define D_CMND_ARTNET "ArtNet"
 #define D_CMND_ARTNET_CONFIG "ArtNetConfig"
 #define D_SO_ARTNET_AUTORUN "ArtNetAutorun"
@@ -608,6 +615,7 @@
 // Commands xdrv_08_serial_bridge.ino
 #define D_CMND_SSERIALSEND "SSerialSend"
 #define D_CMND_SBAUDRATE "SBaudrate"
+#define D_CMND_SSERIALMODE "SSerialMode"
 #define D_CMND_SSERIALBUFFER "SSerialBuffer"
 #define D_CMND_SSERIALCONFIG "SSerialConfig"
   #define D_JSON_SSERIALRECEIVED "SSerialReceived"
@@ -813,7 +821,8 @@
 #define D_CMND_DALI_DIMMER                "dim"
 
 // Commands xsns_02_analog.ino
-#define D_CMND_ADCPARAM "AdcParam"
+#define D_CMND_ADCGPIO "Gpio"
+#define D_CMND_ADCPARAM "Param"
 
 // Commands xsns_05_ds18x20.ino
 #define D_CMND_DS_ALIAS "Alias"
@@ -878,6 +887,7 @@
 #define D_LOG_LVGL "LVG: "         // LVGL graphics engine
 #define D_LOG_THERMOSTAT "THE: "   // Thermostat driver
 #define D_LOG_SENSOR "SNS: "       // Sensor driver
+#define D_LOG_SENSEAIR "SNA: "     // Senseair driver
 
 /********************************************************************************************/
 
@@ -959,10 +969,11 @@ const char HTTP_SNS_HR[]            PROGMEM = "<tr><td colspan=2 style='font-siz
 const char HTTP_SNS_HR_THIN[]       PROGMEM = "<tr><td colspan=2 style='font-size:2px'><hr size=1/></td></tr>";
 const char HTTP_SNS_F_TEMP[]        PROGMEM = "{s}%s "  D_TEMPERATURE         "{m}%*_f " D_UNIT_DEGREE          "%c{e}";
 const char HTTP_SNS_F_VOLTAGE[]     PROGMEM = "{s}%s "  D_VOLTAGE             "{m}%*_f " D_UNIT_VOLT              "{e}";
+const char HTTP_SNS_F_CURRENT[]     PROGMEM = "{s}%s "  D_CURRENT             "{m}%*_f " D_UNIT_AMPERE            "{e}";
 const char HTTP_SNS_F_CURRENT_MA[]  PROGMEM = "{s}%s "  D_CURRENT             "{m}%*_f " D_UNIT_MILLIAMPERE       "{e}";
 const char HTTP_SNS_F_DISTANCE_CM[] PROGMEM = "{s}%s "  D_DISTANCE            "{m}%1_f " D_UNIT_CENTIMETER        "{e}";
-const char HTTP_SNS_F_NOX[]         PROGMEM = "{s}%s "  D_NOX                 "{m}%*_f "                          "{e}";
-const char HTTP_SNS_F_VOC[]         PROGMEM = "{s}%s "  D_VOC                 "{m}%*_f "                          "{e}";
+const char HTTP_SNS_F_NOX[]         PROGMEM = "{s}%s "  D_NOX                 "{m}%*_f"                           "{e}";
+const char HTTP_SNS_F_VOC[]         PROGMEM = "{s}%s "  D_VOC                 "{m}%*_f"                           "{e}";
 const char HTTP_SNS_F_ABS_HUM[]     PROGMEM = "{s}%s "  D_ABSOLUTE_HUMIDITY   "{m}%*_f " D_UNIT_GRAM_PER_CUBIC_METER "{e}";
 
 const char HTTP_SNS_HUM[]           PROGMEM = "{s}%s "  D_HUMIDITY            "{m}%s " D_UNIT_PERCENT             "{e}";
@@ -980,27 +991,30 @@ const char HTTP_SNS_MOISTURE[]      PROGMEM = "{s}%s "  D_MOISTURE            "{
 const char HTTP_SNS_RANGE_CHR[]     PROGMEM = "{s}%s "  D_RANGE               "{m}%s"                             "{e}";
 const char HTTP_SNS_RANGE[]         PROGMEM = "{s}%s "  D_RANGE               "{m}%d"                             "{e}";
 const char HTTP_SNS_HALL_EFFECT[]   PROGMEM = "{s}%s "  D_HALL_EFFECT         "{m}%d"                             "{e}";
-const char HTTP_SNS_PH[]            PROGMEM = "{s}%s "  D_PH                  "{m}%s "                            "{e}";
-const char HTTP_SNS_MQ[]            PROGMEM = "{s}"     D_MQ"-%s"             "{m}%s " D_UNIT_PARTS_PER_MILLION   "{e}";
+const char HTTP_SNS_PH[]            PROGMEM = "{s}%s "  D_PH                  "{m}%s"                             "{e}";
+const char HTTP_SNS_MQ[]            PROGMEM = "{s}"     D_MQ "-%s"            "{m}%s " D_UNIT_PARTS_PER_MILLION   "{e}";
 const char HTTP_SNS_ORP[]           PROGMEM = "{s}%s "  D_ORP                 "{m}%s " D_UNIT_MILLIVOLT           "{e}";
 const char HTTP_SNS_EC[]            PROGMEM = "{s}%s "  D_EC                  "{m}%s " D_UNIT_MICROSIEMENS_PER_CM "{e}";
 const char HTTP_SNS_O2[]            PROGMEM = "{s}%s "  D_O2                  "{m}%s " D_UNIT_PERCENT             "{e}";
 const char HTTP_SNS_LITERS[]        PROGMEM = "{s}%s "  D_VOLUME              "{m}%s " D_UNIT_LITERS              "{e}";
 const char HTTP_SNS_LPM[]           PROGMEM = "{s}%s "  D_FLOW_RATE           "{m}%s " D_UNIT_LITERS_PER_MIN      "{e}";
 const char HTTP_SNS_DO[]            PROGMEM = "{s}%s "  D_DO                  "{m}%s " D_UNIT_MILIGRAMS_PER_LITER "{e}";
-const char HTTP_SNS_COLOR_RED[]     PROGMEM = "{s}%s "  D_COLOR_RED           "{m}%u "                            "{e}";
-const char HTTP_SNS_COLOR_GREEN[]   PROGMEM = "{s}%s "  D_COLOR_GREEN         "{m}%u "                            "{e}";
-const char HTTP_SNS_COLOR_BLUE[]    PROGMEM = "{s}%s "  D_COLOR_BLUE          "{m}%u "                            "{e}";
+const char HTTP_SNS_COLOR_RED[]     PROGMEM = "{s}%s "  D_COLOR_RED           "{m}%u"                             "{e}";
+const char HTTP_SNS_COLOR_GREEN[]   PROGMEM = "{s}%s "  D_COLOR_GREEN         "{m}%u"                             "{e}";
+const char HTTP_SNS_COLOR_BLUE[]    PROGMEM = "{s}%s "  D_COLOR_BLUE          "{m}%u"                             "{e}";
 const char HTTP_SNS_MILLILITERS[]   PROGMEM = "{s}%s "  D_VOLUME              "{m}%s " D_UNIT_MILLILITERS         "{e}";
 const char HTTP_SNS_GAS[]           PROGMEM = "{s}%s "  D_GAS                 "{m}%d " D_UNIT_PERCENT          "LEL{e}";
 const char HTTP_SNS_SOC[]           PROGMEM = "{s}%s "  D_SOC                 "{m}%d " D_UNIT_PERCENT             "{e}";
 const char HTTP_SNS_SOH[]           PROGMEM = "{s}%s "  D_SOH                 "{m}%d " D_UNIT_PERCENT             "{e}";
+const char HTTP_SNS_WATER_DEPTH[]   PROGMEM = "{s}%s "  D_WATER_DEPTH         "{m}%s " D_UNIT_CENTIMETER          "{e}";
 
 const char HTTP_SNS_STANDARD_CONCENTRATION[] PROGMEM =        "{s}%s " D_STANDARD_CONCENTRATION      " %s " D_UNIT_MICROMETER "{m}%d " D_UNIT_MICROGRAM_PER_CUBIC_METER "{e}";
 const char HTTP_SNS_ENVIRONMENTAL_CONCENTRATION[] PROGMEM =   "{s}%s " D_ENVIRONMENTAL_CONCENTRATION " %s " D_UNIT_MICROMETER "{m}%d " D_UNIT_MICROGRAM_PER_CUBIC_METER "{e}";
 const char HTTP_SNS_F_ENVIRONMENTAL_CONCENTRATION[] PROGMEM = "{s}%s " D_ENVIRONMENTAL_CONCENTRATION " %s " D_UNIT_MICROMETER "{m}%1_f " D_UNIT_MICROGRAM_PER_CUBIC_METER "{e}";
 const char HTTP_SNS_PARTICALS_BEYOND[] PROGMEM =              "{s}%s " D_PARTICALS_BEYOND            " %s " D_UNIT_MICROMETER "{m}%d " D_UNIT_PARTS_PER_DECILITER       "{e}";
-const char HTTP_SNS_AVG_RAD_DOSE[]     PROGMEM =              "{s}%s " D_AVG_RAD_DOSE                " %s " D_UNIT_MINUTE     "{m}%d.%02d " D_UNIT_US_H                  "{e}";
+const char HTTP_SNS_AVG_RAD_DOSE[]     PROGMEM =              "{s}%s " D_AVG_RAD_DOSE                " %s " D_UNIT_MINUTE     "{m}%d.%02d " D_UNIT_US_H                 "{e}";
+const char HTTP_SNS_US_AQI[] PROGMEM =                        "{s}%s US AQI"                                                  "{m}%d"                                   "{e}";
+const char HTTP_SNS_US_EPA_AQI[] PROGMEM =                    "{s}%s US EPA AQI"                                              "{m}%d"                                   "{e}";
 
 const char HTTP_SNS_VOLTAGE[]             PROGMEM = "{s}" D_VOLTAGE                 "{m}%s " D_UNIT_VOLT          "{e}";
 const char HTTP_SNS_CURRENT[]             PROGMEM = "{s}" D_CURRENT                 "{m}%s " D_UNIT_AMPERE        "{e}";
@@ -1012,7 +1026,7 @@ const char HTTP_SNS_MAX_POWER[]           PROGMEM = "{s}" D_MAX_POWER           
 const char HTTP_SNS_POWER_TOTAL[]         PROGMEM = "{s}" D_POWERUSAGE_ACTIVE_TOTAL "{m}%s " D_UNIT_WATT          "{e}";
 const char HTTP_SNS_POWERUSAGE_APPARENT[] PROGMEM = "{s}" D_POWERUSAGE_APPARENT     "{m}%s " D_UNIT_VA            "{e}";
 const char HTTP_SNS_POWERUSAGE_REACTIVE[] PROGMEM = "{s}" D_POWERUSAGE_REACTIVE     "{m}%s " D_UNIT_VAR           "{e}";
-const char HTTP_SNS_POWER_FACTOR[]        PROGMEM = "{s}" D_POWER_FACTOR            "{m}%s                         {e}";
+const char HTTP_SNS_POWER_FACTOR[]        PROGMEM = "{s}" D_POWER_FACTOR            "{m}%s"                       "{e}";
 const char HTTP_SNS_ENERGY_TODAY[]        PROGMEM = "{s}" D_ENERGY_TODAY            "{m}%s " D_UNIT_KILOWATTHOUR  "{e}";
 const char HTTP_SNS_ENERGY_YESTERDAY[]    PROGMEM = "{s}" D_ENERGY_YESTERDAY        "{m}%s " D_UNIT_KILOWATTHOUR  "{e}";
 const char HTTP_SNS_ENERGY_TOTAL[]        PROGMEM = "{s}" D_ENERGY_TOTAL            "{m}%s " D_UNIT_KILOWATTHOUR  "{e}";

@@ -48,7 +48,7 @@ const char kHAssJsonSensorUnits[] PROGMEM =
   "||||"
   "VA|%|A|cm|Hz|%|lux|"
   "%|ppd|ppd|ppd|ppd|ppd|ppd|µg/m³|µg/m³|µg/m³|Cos φ|W| |"
-  "VAr|kWh|kWh|V|kg|kWh|"
+  "var|kWh|kWh|V|kg|kWh|"
   "ppm|ppm|ppb|R|G|B|" D_UNIT_KELVIN "| |";
 
 const char kHAssJsonSensorDevCla[] PROGMEM =
@@ -958,13 +958,13 @@ void HAssAnnounceSensor(const char *sensorname, const char *subsensortype, const
 
 void HAssAnnounceSensors(void)
 {
-  uint8_t hass_xsns_index = 0;
+  bool hass_xsns_index = true;
   do
   {
     ResponseClear();
     int tele_period_save = TasmotaGlobal.tele_period;
     TasmotaGlobal.tele_period = 2;                                 // Do not allow HA updates during next function call
-    XsnsNextCall(FUNC_JSON_APPEND, hass_xsns_index); // ,"INA219":{"Voltage":4.494,"Current":0.020,"Power":0.089}
+    hass_xsns_index = XsnsCallNextJsonAppend(); // ,"INA219":{"Voltage":4.494,"Current":0.020,"Power":0.089}
     TasmotaGlobal.tele_period = tele_period_save;
     size_t sensordata_len = ResponseLength();
     char sensordata[sensordata_len+2];   // dynamically adjust the size

@@ -3,7 +3,7 @@ DEBUG_FLAGS = -O0 -g -DBE_DEBUG
 TEST_FLAGS  = $(DEBUG_FLAGS) --coverage -fno-omit-frame-pointer -fsanitize=address -fsanitize=undefined
 LIBS        = -lm
 TARGET      = berry
-CC          = clang # install clang!! gcc seems to produce a defect berry binary
+CC          = gcc
 MKDIR       = mkdir
 LFLAGS      =
 
@@ -21,8 +21,7 @@ ifeq ($(OS), Windows_NT) # Windows
     PYTHON    ?= python # only for windows and need python3
     COC       := $(PYTHON) $(COC)
 else
-    CFLAGS    += -DUSE_READLINE_LIB
-    LIBS      += -lreadline -ldl
+    LIBS      += -ldl
     OS        := $(shell uname)
     ifeq ($(OS), Linux)
         LFLAGS += -Wl,--export-dynamic

@@ -324,8 +324,8 @@ static void end_func(bparser *parser)
     proto->codesize = finfo->pc;
     proto->ktab = be_vector_release(vm, &finfo->kvec);
     proto->nconst = be_vector_count(&finfo->kvec);
-    proto->ptab = be_vector_release(vm, &finfo->pvec);
     proto->nproto = be_vector_count(&finfo->pvec);
+    proto->ptab = be_vector_release(vm, &finfo->pvec);
 #if BE_USE_MEM_ALIGNED
     proto->code = be_move_to_aligned(vm, proto->code, proto->codesize * sizeof(binstruction));     /* move `code` to 4-bytes aligned memory region */
     proto->ktab = be_move_to_aligned(vm, proto->ktab, proto->nconst * sizeof(bvalue));     /* move `ktab` to 4-bytes aligned memory region */
@@ -1548,7 +1548,7 @@ static void class_stmt(bparser *parser)
         bexpdesc e1;                        /* if inline class, we add a second local variable for _class */
         init_exp(&e1, ETLOCAL, 0);
         e1.v.idx = new_localvar(parser, class_str);
-        be_code_setvar(parser->finfo, &e1, &e, 1);
+        be_code_setvar(parser->finfo, &e1, &e, btrue);
 
         begin_varinfo(parser, class_str);
 

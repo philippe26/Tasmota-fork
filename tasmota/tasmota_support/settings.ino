@@ -189,9 +189,9 @@ bool RtcRebootValid(void) {
 
 extern "C" {
 #include "spi_flash.h"
-#if ESP_IDF_VERSION_MAJOR >= 5
-  #include "spi_flash_mmap.h"
-#endif
+#ifdef ESP32
+#include "spi_flash_mmap.h"
+#endif  // ESP32
 }
 
 #ifdef ESP8266
@@ -434,7 +434,7 @@ bool SettingsBufferAlloc(uint32_t upload_size) {
 
   }
 
-  if (!(settings_buffer = (uint8_t *)calloc(settings_size, 1))) {
+  if (!(settings_buffer = (uint8_t *)calloc(1, settings_size))) {
     AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_APPLICATION D_UPLOAD_ERR_2));  // Not enough (memory) space
     return false;
   }
@@ -687,9 +687,11 @@ char* SettingsText(uint32_t index) {
 
   if (index >= SET_MAX) { // Index above SET_MAX are not stored in Settings
 #ifdef USE_WEBSERVER
+#ifndef FIRMWARE_MINIMAL
     if (SET_BUTTON17 <= index && index <= SET_BUTTON32)
       return (char*)GetWebButton(index-SET_BUTTON17+16);
-#endif
+#endif  // not FIRMWARE_MINIMAL
+#endif  // USE_WEBSERVER
     position += settings_text_size -1;  // Setting not supported - internal error - return empty string
   } else {
     SettingsUpdateFinished();
@@ -926,6 +928,14 @@ void SettingsSdkErase(void) {
 
 /********************************************************************************************/
 
+void SettingsMinimum(void) {
+  // Set life-saving parameters if out-of-range due to reconfig Settings Area
+  if (Settings->dns_timeout < 100) { Settings->dns_timeout = DNS_TIMEOUT; }
+  if (Settings->mqtt_keepalive < 1) { Settings->mqtt_keepalive = MQTT_KEEPALIVE; }
+  if (Settings->mqtt_socket_timeout < 1) { Settings->mqtt_socket_timeout = MQTT_SOCKET_TIMEOUT; }
+  if (Settings->mqtt_wifi_timeout < 1) { Settings->mqtt_wifi_timeout = MQTT_WIFI_CLIENT_TIMEOUT / 100; }
+}
+
 void SettingsDefault(void) {
   AddLog(LOG_LEVEL_INFO, PSTR(D_LOG_CONFIG D_USE_DEFAULTS));
   SettingsDefaultSet1();
@@ -985,6 +995,7 @@ void SettingsDefaultSet2(void) {
   flag.stop_flash_rotate |= APP_FLASH_CYCLE;
   flag.global_state |= APP_ENABLE_LEDLINK;
   flag3.sleep_normal |= APP_NORMAL_SLEEP;
+#ifndef FIRMWARE_MINIMAL    // not needed in minimal/safeboot because of disabled feature and Settings are not saved anyways
   flag3.no_power_feedback |= APP_NO_RELAY_SCAN;
   flag3.fast_power_cycle_disable |= APP_DISABLE_POWERCYCLE;
   flag3.bootcount_update |= DEEPSLEEP_BOOTCOUNT;
@@ -993,13 +1004,12 @@ void SettingsDefaultSet2(void) {
   Settings->param[P_BACKLOG_DELAY] = MIN_BACKLOG_DELAY;
   Settings->param[P_BOOT_LOOP_OFFSET] = BOOT_LOOP_OFFSET;  // SetOption36
   Settings->param[P_RGB_REMAP] = RGB_REMAP_RGBW;
-  Settings->sleep = APP_SLEEP;
-  if (Settings->sleep < 50) {
-    Settings->sleep = 50;                // Default to 50 for sleep, for now
-  }
+#endif // FIRMWARE_MINIMAL
+  Settings->sleep = TASMOTA_SLEEP;
   Settings->battery_level_percent = 101;
 
   // Module
+#ifndef FIRMWARE_MINIMAL    // not needed in minimal/safeboot because of disabled feature and Settings are not saved anyways
   flag.interlock |= APP_INTERLOCK_MODE;
   Settings->interlock[0] = APP_INTERLOCK_GROUP_1;
   Settings->interlock[1] = APP_INTERLOCK_GROUP_2;
@@ -1007,12 +1017,15 @@ void SettingsDefaultSet2(void) {
   Settings->interlock[3] = APP_INTERLOCK_GROUP_4;
   Settings->module = MODULE;
   Settings->fallback_module = FALLBACK_MODULE;
+#endif // FIRMWARE_MINIMAL
   ModuleDefault(WEMOS);
 //  for (uint32_t i = 0; i < nitems(Settings->my_gp.io); i++) { Settings->my_gp.io[i] = GPIO_NONE; }
   SettingsUpdateText(SET_FRIENDLYNAME1, PSTR(FRIENDLY_NAME));
+#ifndef FIRMWARE_MINIMAL    // not needed in minimal/safeboot because of disabled feature and Settings are not saved anyways
   SettingsUpdateText(SET_FRIENDLYNAME2, PSTR(FRIENDLY_NAME"2"));
   SettingsUpdateText(SET_FRIENDLYNAME3, PSTR(FRIENDLY_NAME"3"));
   SettingsUpdateText(SET_FRIENDLYNAME4, PSTR(FRIENDLY_NAME"4"));
+#endif // FIRMWARE_MINIMAL
   #ifdef DEVICE_NAME
   SettingsUpdateText(SET_DEVICENAME, PSTR(DEVICE_NAME));
   #else
@@ -1021,6 +1034,7 @@ void SettingsDefaultSet2(void) {
   SettingsUpdateText(SET_OTAURL, PSTR(OTA_URL));
 
   // Power
+#ifndef FIRMWARE_MINIMAL    // not needed in minimal/safeboot because of disabled feature and Settings are not saved anyways
   flag.save_state |= SAVE_STATE;
   Settings->power = APP_POWER;
   Settings->poweronstate = APP_POWERON_STATE;
@@ -1034,6 +1048,7 @@ void SettingsDefaultSet2(void) {
   Settings->pulse_timer[0] = APP_PULSETIME;
 //  for (uint32_t i = 1; i < MAX_PULSETIMERS; i++) { Settings->pulse_timer[i] = 0; }
   Settings->param[P_BISTABLE_PULSE] = APP_BISTABLE_PULSE;
+#endif // FIRMWARE_MINIMAL
 
   // Serial
   Settings->serial_config = TS_SERIAL_8N1;
@@ -1079,14 +1094,21 @@ void SettingsDefaultSet2(void) {
   flag5.wifi_no_sleep |= WIFI_NO_SLEEP;
 
   // Syslog
+#ifndef FIRMWARE_MINIMAL    // not needed in minimal/safeboot because of disabled feature and Settings are not saved anyways
   SettingsUpdateText(SET_SYSLOG_HOST, PSTR(SYS_LOG_HOST));
   Settings->syslog_port = SYS_LOG_PORT;
   Settings->syslog_level = SYS_LOG_LEVEL;
+#endif // FIRMWARE_MINIMAL
 
   // Webserver
+#ifndef FIRMWARE_MINIMAL    // not needed in minimal/safeboot because of disabled feature and Settings are not saved anyways
   flag2.emulation |= EMULATION;
   flag4.alexa_gen_1 |= EMULATION_HUE_1ST_GEN;
+#endif // FIRMWARE_MINIMAL
+  flag5.gui_module_name |= GUI_NOSHOW_MODULE;
+  flag6.gui_device_name |= GUI_NOSHOW_DEVICENAME;
   flag3.gui_hostname_ip |= GUI_SHOW_HOSTNAME;
+  flag6.gui_no_state_text |= GUI_NOSHOW_STATETEXT;
   flag3.mdns_enabled |= MDNS_ENABLED;
   Settings->webserver = WEB_SERVER;
   Settings->weblog_level = WEB_LOG_LEVEL;
@@ -1097,7 +1119,9 @@ void SettingsDefaultSet2(void) {
 #else
   flag5.disable_referer_chk |= true;
 #endif
+
   // Button
+#ifndef FIRMWARE_MINIMAL    // not needed in minimal/safeboot because of disabled feature and Settings are not saved anyways
   flag.button_restrict |= KEY_DISABLE_MULTIPRESS;
   flag.button_swap |= KEY_SWAP_DOUBLE_PRESS;
   flag.button_single |= KEY_ONLY_SINGLE_PRESS;
@@ -1105,11 +1129,15 @@ void SettingsDefaultSet2(void) {
 #if defined(SOC_TOUCH_VERSION_1) || defined(SOC_TOUCH_VERSION_2)
   Settings->touch_threshold = ESP32_TOUCH_THRESHOLD;
 #endif  // ESP32 SOC_TOUCH_VERSION_1 or SOC_TOUCH_VERSION_2
+#endif // FIRMWARE_MINIMAL
 
   // Switch
+#ifndef FIRMWARE_MINIMAL    // not needed in minimal/safeboot because of disabled feature and Settings are not saved anyways
   for (uint32_t i = 0; i < MAX_SWITCHES_SET; i++) { Settings->switchmode[i] = SWITCH_MODE; }
+#endif // FIRMWARE_MINIMAL
 
   // MQTT
+#ifndef FIRMWARE_MINIMAL    // not needed in minimal/safeboot because of disabled feature and Settings are not saved anyways
   flag.mqtt_enabled |= MQTT_USE;
   flag.mqtt_response |= MQTT_RESULT_COMMAND;
   flag.mqtt_offline |= MQTT_LWT_MESSAGE;
@@ -1122,7 +1150,7 @@ void SettingsDefaultSet2(void) {
   flag5.mqtt_status_retain |= MQTT_STATUS_RETAIN;
   flag5.mqtt_switches |= MQTT_SWITCHES;
   flag5.mqtt_persistent |= ~MQTT_CLEAN_SESSION;
-  flag6.mqtt_disable_sserialrec |= MQTT_DISABLE_SSERIALRECEIVED;
+  flag6.mqtt_disable_publish |= MQTT_DISABLE_SSERIALRECEIVED;
   flag6.mqtt_disable_modbus |= MQTT_DISABLE_MODBUSRECEIVED;
 //  flag.mqtt_serial |= 0;
   flag.device_index_enable |= MQTT_POWER_FORMAT;
@@ -1131,6 +1159,7 @@ void SettingsDefaultSet2(void) {
   flag3.no_hold_retain |= MQTT_NO_HOLD_RETAIN;
   flag3.use_underscore |= MQTT_INDEX_SEPARATOR;
   flag3.grouptopic_mode |= MQTT_GROUPTOPIC_FORMAT;
+  flag4.only_json_message |= MQTT_ONLY_JSON_OUTPUT;
   SettingsUpdateText(SET_MQTT_HOST, MQTT_HOST);
   Settings->mqtt_port = MQTT_PORT;
   SettingsUpdateText(SET_MQTT_CLIENT, PSTR(MQTT_CLIENT_ID));
@@ -1156,8 +1185,10 @@ void SettingsDefaultSet2(void) {
   Settings->mqtt_keepalive = MQTT_KEEPALIVE;
   Settings->mqtt_socket_timeout = MQTT_SOCKET_TIMEOUT;
   Settings->mqtt_wifi_timeout = MQTT_WIFI_CLIENT_TIMEOUT / 100;
+#endif // FIRMWARE_MINIMAL
 
   // Energy
+#ifndef FIRMWARE_MINIMAL    // not needed in minimal/safeboot because of disabled feature and Settings are not saved anyways
   flag.no_power_on_check |= ENERGY_VOLTAGE_ALWAYS;
   flag2.current_resolution |= 3;
 //  flag2.voltage_resolution |= 0;
@@ -1191,9 +1222,9 @@ void SettingsDefaultSet2(void) {
 //  Settings->energy_max_power_limit = 0;                            // MaxPowerLimit
   Settings->energy_max_power_limit_hold = MAX_POWER_HOLD;
   Settings->energy_max_power_limit_window = MAX_POWER_WINDOW;
-//  Settings->energy_max_power_safe_limit = 0;                       // MaxSafePowerLimit
-  Settings->energy_max_power_safe_limit_hold = SAFE_POWER_HOLD;
-  Settings->energy_max_power_safe_limit_window = SAFE_POWER_WINDOW;
+//  Settings->ex_energy_max_power_safe_limit = 0;                    // MaxSafePowerLimit
+//  Settings->ex_energy_max_power_safe_limit_hold = SAFE_POWER_HOLD;
+//  Settings->ex_energy_max_power_safe_limit_window = SAFE_POWER_WINDOW;
 //  Settings->energy_max_energy = 0;                                 // MaxEnergy
 //  Settings->energy_max_energy_start = 0;                           // MaxEnergyStart
 //  Settings->energy_kWhtotal_ph[0] = 0;
@@ -1205,19 +1236,24 @@ void SettingsDefaultSet2(void) {
 //  memset((char*)&Settings->energy_usage, 0x00, sizeof(Settings->energy_usage));
   memset((char*)&RtcSettings.energy_usage, 0x00, sizeof(RtcSettings.energy_usage));
   Settings->param[P_OVER_TEMP] = ENERGY_OVERTEMP;
+#endif // FIRMWARE_MINIMAL
 
   // IRRemote
+#ifndef FIRMWARE_MINIMAL    // not needed in minimal/safeboot because of disabled feature and Settings are not saved anyways
   flag.ir_receive_decimal |= IR_DATA_RADIX;
   flag3.receive_raw |= IR_ADD_RAW_DATA;
   Settings->param[P_IR_UNKNOW_THRESHOLD] = IR_RCV_MIN_UNKNOWN_SIZE;
   Settings->param[P_IR_TOLERANCE] = IR_RCV_TOLERANCE;
+#endif // FIRMWARE_MINIMAL
 
   // RF Bridge
-  flag.rf_receive_decimal |= RF_DATA_RADIX;
+#ifndef FIRMWARE_MINIMAL    // not needed in minimal/safeboot because of disabled feature and Settings are not saved anyways
 //  for (uint32_t i = 0; i < 17; i++) { Settings->rf_code[i][0] = 0; }
   memcpy_P(Settings->rf_code[0], kDefaultRfCode, 9);
+#endif // FIRMWARE_MINIMAL
 
   // Domoticz
+#ifndef FIRMWARE_MINIMAL    // not needed in minimal/safeboot because of disabled feature and Settings are not saved anyways
   Settings->domoticz_update_timer = DOMOTICZ_UPDATE_TIMER;
 //  for (uint32_t i = 0; i < MAX_DOMOTICZ_IDX; i++) {
 //    Settings->domoticz_relay_idx[i] = 0;
@@ -1227,8 +1263,10 @@ void SettingsDefaultSet2(void) {
 //  for (uint32_t i = 0; i < MAX_DOMOTICZ_SNS_IDX; i++) {
 //    Settings->domoticz_sensor_idx[i] = 0;
 //  }
+#endif // FIRMWARE_MINIMAL
 
   // Sensor
+#ifndef FIRMWARE_MINIMAL    // not needed in minimal/safeboot because of disabled feature and Settings are not saved anyways
   flag.temperature_conversion |= TEMP_CONVERSION;
   flag.pressure_conversion |= PRESSURE_CONVERSION;
   flag2.pressure_resolution |= PRESSURE_RESOLUTION;
@@ -1269,6 +1307,7 @@ void SettingsDefaultSet2(void) {
   flag4.white_blend_mode |= LIGHT_WHITE_BLEND_MODE;
   flag4.virtual_ct |= LIGHT_VIRTUAL_CT;
   flag4.virtual_ct_cw |= LIGHT_VIRTUAL_CT_CW;
+#endif // FIRMWARE_MINIMAL
 
   Settings->pwm_frequency = PWM_FREQ;
   Settings->pwm_range = PWM_RANGE;
@@ -1285,6 +1324,7 @@ void SettingsDefaultSet2(void) {
 //  Settings->light_wakeup = 0;
   Settings->light_pixels = WS2812_LEDS;
 //  Settings->light_rotation = 0;
+#ifndef FIRMWARE_MINIMAL    // not needed in minimal/safeboot because of disabled feature and Settings are not saved anyways
   Settings->ws_width[WS_SECOND] = 1;
   Settings->ws_color[WS_SECOND][WS_RED] = 255;
 //  Settings->ws_color[WS_SECOND][WS_GREEN] = 0;
@@ -1305,8 +1345,10 @@ void SettingsDefaultSet2(void) {
 
   // Device Groups
   *(uint32_t *)&Settings->device_group_tie = 0x04030201;
+#endif // FIRMWARE_MINIMAL
 
   // Display
+#ifndef FIRMWARE_MINIMAL    // not needed in minimal/safeboot because of disabled feature and Settings are not saved anyways
 //  Settings->display_model = 0;
   Settings->display_mode = 0;
   Settings->display_refresh = 2;
@@ -1325,6 +1367,7 @@ void SettingsDefaultSet2(void) {
   Settings->display_address[5] = MTX_ADDRESS6;
   Settings->display_address[6] = MTX_ADDRESS7;
   Settings->display_address[7] = MTX_ADDRESS8;
+#endif // FIRMWARE_MINIMAL
 
   // Time
   if (((APP_TIMEZONE > -14) && (APP_TIMEZONE < 15)) || (99 == APP_TIMEZONE)) {
@@ -1340,6 +1383,8 @@ void SettingsDefaultSet2(void) {
   for (uint32_t i = 0; i < MAX_NTP_SERVERS; i++) {
     SettingsUpdateText(SET_NTPSERVER1 +i, ReplaceCommaWithDot(SettingsText(SET_NTPSERVER1 +i)));
   }
+
+#ifndef FIRMWARE_MINIMAL    // not needed in minimal/safeboot because of disabled feature and Settings are not saved anyways
   Settings->latitude = (int)((double)LATITUDE * 1000000);
   Settings->longitude = (int)((double)LONGITUDE * 1000000);
   SettingsResetStd();
@@ -1357,13 +1402,17 @@ void SettingsDefaultSet2(void) {
   }
 
   Settings->novasds_startingoffset = STARTING_OFFSET;
+#endif // FIRMWARE_MINIMAL
 
   SettingsDefaultWebColor();
 
   memset(&Settings->sensors, 0xFF, 32);  // Enable all possible sensors
+#ifndef FIRMWARE_MINIMAL    // not needed in minimal/safeboot because of disabled feature and Settings are not saved anyways
   SettingsEnableAllI2cDrivers();
+#endif // FIRMWARE_MINIMAL
 
   // Tuya
+#ifndef FIRMWARE_MINIMAL    // not needed in minimal/safeboot because of disabled feature and Settings are not saved anyways
   flag3.tuya_apply_o20 |= TUYA_SETOPTION_20;
   flag5.tuya_allow_dimmer_0 |= TUYA_ALLOW_DIMMER_0;
   flag5.tuya_exclude_from_mqtt |= TUYA_SETOPTION_137;
@@ -1387,6 +1436,10 @@ void SettingsDefaultSet2(void) {
   #ifdef BLE_ESP32_ENABLE
   flag5.mi32_enable |= BLE_ESP32_ENABLE;
   #endif
+#endif // FIRMWARE_MINIMAL
+
+  // Matter
+  flag6.matter_enabled |= MATTER_ENABLED;
 
   Settings->flag = flag;
   Settings->flag2 = flag2;
@@ -1686,12 +1739,19 @@ void SettingsDelta(void) {
     if (Settings->version < 0x0A010003) {  // 10.1.0.3
       Settings->sserial_config = Settings->serial_config;
     }
+
+    // Change CalVer (2022.01.1-4 = 0x14160101) to SemVer (10.1.0.4-7 = 0x0A010004)
+    uint32_t version2022 = Settings->version & 0x00FF0000;
+    if (0x00160000 == version2022) {       // Version x.22.x.x is not likely to appear
+      Settings->version = 0x0A010005;      // Choose this as 0x0A010006 has a change following
+    }
+
     if (Settings->version < 0x0A010006) {  // 10.1.0.6
       Settings->web_time_start = 0;
       Settings->web_time_end = 0;
     }
     if (Settings->version < 0x0B000003) {  // 11.0.0.3
-       memcpy(Settings->pulse_timer, Settings->ex_pulse_timer, 16);
+       memcpy(Settings->pulse_timer, (uint16_t*)&Settings->weight_precision, 16);
     }
     if (Settings->version < 0x0B000006) {  // 11.0.0.6
         Settings->weight_absconv_a = 0;
@@ -1775,6 +1835,46 @@ void SettingsDelta(void) {
 */
     if (Settings->version < 0x0D040004) {  // 13.4.0.4
       Settings->power_lock = 0;
+    }
+    if (Settings->version < 0x0E000004) {  // 14.0.0.4
+      Settings->tcp_baudrate = (uint16_t)Settings->sserial_mode * 4;
+    }
+    if (Settings->version < 0x0E010002) {  // 14.1.0.2
+      Settings->sserial_mode = Settings->sbflag1.ex_serbridge_console;
+    }
+    if (Settings->version < 0x0E020003) {  // 14.2.0.3
+      Settings->flag3.sb_receive_invert = 0;  // SetOption69  - (Serial) Invert Serial receive on SerialBridge
+    }
+    if (Settings->version < 0x0E020004) {  // 14.2.0.4
+      Settings->weight_precision = 0;      // Initialized by HX711 driver
+    }
+    if (Settings->version < 0x0E030002) {  // 14.3.0.2
+      Settings->sbflag1.dali_light = 1;
+    }
+    if (Settings->version < 0x0E030004) {  // 14.3.0.4
+      Settings->mbflag2.dali_group_sliders = 2;
+    }
+    if (Settings->version < 0x0E030006) {  // 14.3.0.6
+      char scolor[10];
+      WebHexCode(COL_BUTTON_OFF, GetTextIndexed(scolor, sizeof(scolor), COL_BUTTON_OFF, kWebColors));
+    }
+    if (Settings->version < 0x0E030007) {  // 14.3.0.7
+      // move up uint8_t knx_CB_registered from 4A8 to 533
+      memmove_P((uint8_t*)&Settings->knx_CB_registered, (uint8_t*)&Settings->switchmode, 1);
+      // move up uint8_t global_sensor_index[3] from 4C5 to 53C
+      memmove_P((uint8_t*)&Settings->global_sensor_index, (uint8_t*)&Settings->switchmode +29, 3);
+      // move dn uint8_t switchmode[MAX_SWITCHES_SET] from 4A9 to 4A8
+      memmove_P((uint8_t*)&Settings->switchmode, (uint8_t*)&Settings->switchmode +1, 28);
+      for (uint32_t i = 28; i < MAX_SWITCHES_SET; i++) {
+        Settings->switchmode[i] = SWITCH_MODE;
+      }
+      // move up int8_t shutter_tilt_pos[MAX_SHUTTERS], uint16_t influxdb_period and uint16_t rf_duplicate_timefrom 51C to 534
+      memmove_P((uint8_t*)&Settings->shutter_tilt_pos, (uint8_t*)&Settings->shutter_tilt_config +12, 8);
+      // move up int8_t shutter_tilt_config[5][MAX_SHUTTERS] from 508 to 510
+      memmove_P((uint8_t*)&Settings->shutter_tilt_config, (uint8_t*)&Settings->shutter_tilt_config -8, 20);
+      for (uint32_t i = 14; i < MAX_INTERLOCKS_SET; i++) {
+        Settings->interlock[i] = 0;
+      }
     }
 
     Settings->version = TASMOTA_VERSION;

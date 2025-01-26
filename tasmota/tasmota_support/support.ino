@@ -22,6 +22,34 @@ extern struct rst_info resetInfo;
 }
 
 /*********************************************************************************************\
+ * ESP32 Watchdog
+\*********************************************************************************************/
+#ifdef ESP32
+// Watchdog - yield() resets the watchdog
+
+extern "C" void __yield(void);              // original function from Arduino Core
+extern "C"
+void yield(void) {
+  __yield();
+  feedLoopWDT();
+}
+
+// patching delay(uint32_t ms)
+extern "C" void __real_delay(uint32_t ms);  // original function from Arduino Core
+
+extern "C" void __wrap_delay(uint32_t ms) {
+#ifdef USE_ESP32_WDT
+  if (ms) { feedLoopWDT(); }
+  __real_delay(ms);
+  feedLoopWDT();
+#else
+  __real_delay(ms);
+#endif
+}
+
+#endif // ESP32
+
+/*********************************************************************************************\
  * Watchdog extension (https://github.com/esp8266/Arduino/issues/1532)
 \*********************************************************************************************/
 
@@ -562,12 +590,17 @@ char* SetStr(const char* str) {
   return new_str;
 }
 
-bool StrCaseStr_P(const char* source, const char* search) {
+char* StrCaseStr_P(const char* source, const char* search) {
   char case_source[strlen_P(source) +1];
   UpperCase_P(case_source, source);
   char case_search[strlen_P(search) +1];
   UpperCase_P(case_search, search);
-  return (strstr(case_source, case_search) != nullptr);
+  char *cp = strstr(case_source, case_search);
+  if (cp) {
+    uint32_t offset = cp - case_source;
+    cp = (char*)source + offset;
+  }
+  return cp;
 }
 
 bool IsNumeric(const char* value) {
@@ -611,16 +644,18 @@ String HexToString(uint8_t* data, uint32_t length) {
 // Converts a Hex string (case insensitive) into an array of bytes
 // Returns the number of bytes in the array, or -1 if an error occured
 // The `out` buffer must be at least half the size of hex string
-int32_t HexToBytes(const char* hex, uint8_t* out, size_t* outLen) {
+int32_t HexToBytes(const char* hex, uint8_t* out, size_t out_len) {
   size_t len = strlen_P(hex);
-  *outLen = 0;
   if (len % 2 != 0) {
     return -1;
   }
 
-  size_t outLength = len / 2;
+  size_t bytes_out = len / 2;
+  if (bytes_out > out_len) {
+    bytes_out = out_len;
+  }
   
-  for(size_t i = 0; i < outLength; i++) {
+  for (size_t i = 0; i < bytes_out; i++) {
     char byte[3];
     byte[0] = hex[i*2];
     byte[1] = hex[i*2 + 1];
@@ -629,11 +664,11 @@ int32_t HexToBytes(const char* hex, uint8_t* out, size_t* outLen) {
     char* endPtr;
     out[i] = strtoul(byte, &endPtr, 16);
     
-    if(*endPtr != '\0') {
+    if (*endPtr != '\0') {
       return -1;
     }
   }
-  return outLength;
+  return bytes_out;
 }
 
 String UrlEncode(const String& text) {
@@ -797,9 +832,27 @@ int32_t UpdateDevicesPresent(int32_t change) {
   else if (devices_present >= POWER_SIZE) {           // Support up to uint32_t as bitmask
     difference = devices_present - POWER_SIZE;
     devices_present = POWER_SIZE;
+//    AddLog(LOG_LEVEL_DEBUG, PSTR("APP: Max 32 devices supported"));
   }
   TasmotaGlobal.devices_present = devices_present;
+
+//  AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("DVC: DevicesPresent %d, Change %d"), TasmotaGlobal.devices_present, change);
+
   return difference;
+}
+
+void DevicesPresentNonDisplayOrLight(uint32_t &devices_claimed) {
+  uint32_t display_and_lights = 0;
+#ifdef USE_LIGHT
+  display_and_lights += LightDevices();               // Skip light(s)
+#endif  // USE_LIGHT
+#ifdef USE_DISPLAY
+  display_and_lights += DisplayDevices();             // Skip display
+#endif  // USE_DISPLAY
+  uint32_t devices_present = TasmotaGlobal.devices_present - display_and_lights;
+  if (devices_claimed > devices_present) {
+    devices_claimed = devices_present;                // Reduce amount of claimed devices
+  }
 }
 
 char* GetPowerDevice(char* dest, uint32_t idx, size_t size, uint32_t option)
@@ -1098,6 +1151,8 @@ int GetCommandCode(char* destination, size_t destination_size, const char* needl
 
 bool DecodeCommand(const char* haystack, void (* const MyCommand[])(void), const uint8_t *synonyms = nullptr);
 bool DecodeCommand(const char* haystack, void (* const MyCommand[])(void), const uint8_t *synonyms) {
+  SHOW_FREE_MEM(PSTR("DecodeCommand"));
+
   GetTextIndexed(XdrvMailbox.command, CMDSZ, 0, haystack);  // Get prefix if available
   int prefix_length = strlen(XdrvMailbox.command);
   if (prefix_length) {
@@ -1381,6 +1436,49 @@ bool ResponseContains_P(const char* needle) {
   return (strstr_P(ResponseData(), needle) != nullptr);
 }
 
+bool GetNextSensor(void) {
+  static uint32_t start_time = 0;
+  static uint8_t sensor_set = 0;
+
+  ResponseClear();
+  int tele_period_save = TasmotaGlobal.tele_period;
+  TasmotaGlobal.tele_period = 2;                     // Do not allow HA updates during next function call
+  while (!ResponseLength()) {
+    if (0 == sensor_set) {
+      if (TimeReached(start_time)) {
+        SetNextTimeInterval(start_time, 1000);
+        sensor_set++;                                // Minimal loop time is 1 second
+      }
+      break;
+    }
+    else if (1 == sensor_set) {
+      if (!XsnsCallNextJsonAppend()) {               // ,"INA219":{"Voltage":4.494,"Current":0.020,"Power":0.089}
+        sensor_set++;                                // Looped
+        break;
+      }
+    }
+    else {
+      if (!XdrvCallNextJsonAppend()) {               // ,"INA219":{"Voltage":4.494,"Current":0.020,"Power":0.089}
+        sensor_set = 0;                              // Looped
+        break;
+      }
+    }
+  }
+
+//  AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("DBG: GetNextSensor %d, %d"), sensor_set, ResponseLength());
+
+  TasmotaGlobal.tele_period = tele_period_save;
+  if (ResponseLength()) {
+    ResponseJsonStart();                             // {"INA219":{"Voltage":4.494,"Current":0.020,"Power":0.089}}
+    ResponseJsonEnd();
+
+//    AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("DBG: GetNextSensor %d, '%s'"), sensor_set, ResponseData());
+
+    return true;
+  }
+  return false;
+}
+
 /*********************************************************************************************\
  * GPIO Module and Template management
 \*********************************************************************************************/
@@ -1504,16 +1602,7 @@ bool ValidModule(uint32_t index)
 }
 
 bool ValidTemplate(const char *search) {
-/*
-  char template_name[strlen(SettingsText(SET_TEMPLATE_NAME)) +1];
-  char search_name[strlen(search) +1];
-
-  LowerCase(template_name, SettingsText(SET_TEMPLATE_NAME));
-  LowerCase(search_name, search);
-
-  return (strstr(template_name, search_name) != nullptr);
-*/
-  return StrCaseStr_P(SettingsText(SET_TEMPLATE_NAME), search);
+  return (StrCaseStr_P(SettingsText(SET_TEMPLATE_NAME), search) != nullptr);
 }
 
 String AnyModuleName(uint32_t index)
@@ -1753,6 +1842,7 @@ bool ValidGPIO(uint32_t pin, uint32_t gpio) {
 #endif
   return (GPIO_USER == ValidPin(pin, BGPIO(gpio)));  // Only allow GPIO_USER pins
 }
+
 
 bool ValidSpiPinUsed(uint32_t gpio) {
   // ESP8266: If SPI pin selected chk if it's not one of the three Hardware SPI pins (12..14)
@@ -2033,7 +2123,14 @@ uint32_t ConvertSerialConfig(uint8_t serial_config) {
 //}
 //#else
 uint32_t GetSerialBaudrate(void) {
-  return (Serial.baudRate() / 300) * 300;  // Fix ESP32 strange results like 115201
+//  return (Serial.baudRate() / 300) * 300;  // Fix ESP32 strange results like 115201
+// Since core 3.0.4 the returned baudrate could even be 115942 instead of 115200 !!!
+  uint32_t margin = 300;
+  uint32_t baudrate = Serial.baudRate();
+  if (baudrate > 10000) {
+    margin = 2400;
+  }
+  return (baudrate / margin) * margin;  // Fix ESP32 strange results like 115201
 }
 //#endif
 
@@ -2108,7 +2205,9 @@ void ClaimSerial(void) {
 #ifdef ESP32
 #if CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3
 #ifdef USE_USB_CDC_CONSOLE
-  return;              // USB console does not use serial
+  if (!tasconsole_serial) {
+    return;              // USB console does not use serial
+  }
 #endif  // USE_USB_CDC_CONSOLE
 #endif  // ESP32C3/C6, S2 or S3
 #endif  // ESP32
@@ -2201,28 +2300,50 @@ void TasShiftOut(uint8_t dataPin, uint8_t clockPin, uint8_t bitOrder, uint8_t va
 /*********************************************************************************************\
  * Sleep aware time scheduler functions borrowed from ESPEasy
 \*********************************************************************************************/
+/*
+// No need to use 64-bit
+inline uint64_t GetMicros64() {
+#ifdef ESP8266
+  return micros64();
+#endif
+#ifdef ESP32
+  return esp_timer_get_time();
+#endif
+}
 
-inline int32_t TimeDifference(uint32_t prev, uint32_t next)
-{
+inline int64_t TimeDifference64(uint64_t prev, uint64_t next) {
+  return ((int64_t) (next - prev));
+}
+
+int64_t TimePassedSince64(const uint64_t& timestamp) {
+  return TimeDifference64(timestamp, GetMicros64());
+}
+
+bool TimeReached64(const uint64_t& timer) {
+  return TimePassedSince64(timer) >= 0;
+}
+*/
+
+// Return the time difference as a signed value, taking into account the timers may overflow.
+// Returned timediff is between -24.9 days and +24.9 days.
+// Returned value is positive when "next" is after "prev"
+inline int32_t TimeDifference(uint32_t prev, uint32_t next) {
   return ((int32_t) (next - prev));
 }
 
-int32_t TimePassedSince(uint32_t timestamp)
-{
+int32_t TimePassedSince(uint32_t timestamp) {
   // Compute the number of milliSeconds passed since timestamp given.
   // Note: value can be negative if the timestamp has not yet been reached.
   return TimeDifference(timestamp, millis());
 }
 
-bool TimeReached(uint32_t timer)
-{
+bool TimeReached(uint32_t timer) {
   // Check if a certain timeout has been reached.
-  const long passed = TimePassedSince(timer);
-  return (passed >= 0);
+  // This is roll-over proof.
+  return TimePassedSince(timer) >= 0;
 }
 
-void SetNextTimeInterval(uint32_t& timer, const uint32_t step)
-{
+void SetNextTimeInterval(uint32_t& timer, const uint32_t step) {
   timer += step;
   const long passed = TimePassedSince(timer);
   if (passed < 0) { return; }   // Event has not yet happened, which is fine.
@@ -2235,13 +2356,11 @@ void SetNextTimeInterval(uint32_t& timer, const uint32_t step)
   timer = millis() + (step - passed);
 }
 
-int32_t TimePassedSinceUsec(uint32_t timestamp)
-{
+int32_t TimePassedSinceUsec(uint32_t timestamp) {
   return TimeDifference(timestamp, micros());
 }
 
-bool TimeReachedUsec(uint32_t timer)
-{
+bool TimeReachedUsec(uint32_t timer) {
   // Check if a certain timeout has been reached.
   const long passed = TimePassedSinceUsec(timer);
   return (passed >= 0);
@@ -2530,6 +2649,10 @@ void AddLogData(uint32_t loglevel, const char* log_data, const char* log_data_pa
 
   uint32_t highest_loglevel = Settings->weblog_level;
   if (Settings->mqttlog_level > highest_loglevel) { highest_loglevel = Settings->mqttlog_level; }
+#ifdef USE_UFILESYS
+  uint32_t filelog_level = Settings->filelog_level % 10;
+  if (filelog_level > highest_loglevel) { highest_loglevel = filelog_level; }
+#endif  // USE_UFILESYS
   if (TasmotaGlobal.syslog_level > highest_loglevel) { highest_loglevel = TasmotaGlobal.syslog_level; }
   if (TasmotaGlobal.templog_level > highest_loglevel) { highest_loglevel = TasmotaGlobal.templog_level; }
   if (TasmotaGlobal.uptime < 3) { highest_loglevel = LOG_LEVEL_DEBUG_MORE; }  // Log all before setup correct log level
@@ -2540,11 +2663,12 @@ void AddLogData(uint32_t loglevel, const char* log_data, const char* log_data_pa
     // Each entry has this format: [index][loglevel][log data]['\1']
 
     // Truncate log messages longer than MAX_LOGSZ which is the log buffer size minus 64 spare
+    char *too_long = nullptr;
     uint32_t log_data_len = strlen(log_data) + strlen(log_data_payload) + strlen(log_data_retained);
-    char too_long[TOPSZ];
     if (log_data_len > MAX_LOGSZ) {
-      snprintf_P(too_long, sizeof(too_long) - 20, PSTR("%s%s"), log_data, log_data_payload);   // 20 = strlen("... 123456 truncated")
-      snprintf_P(too_long, sizeof(too_long), PSTR("%s... %d truncated"), too_long, log_data_len);
+      too_long = (char*)malloc(TOPSZ);     // Use heap in favour of stack
+      snprintf_P(too_long, TOPSZ - 20, PSTR("%s%s"), log_data, log_data_payload);   // 20 = strlen("... 123456 truncated")
+      snprintf_P(too_long, TOPSZ, PSTR("%s... %d truncated"), too_long, log_data_len);
       log_data = too_long;
       log_data_payload = empty;
       log_data_retained = empty;
@@ -2565,6 +2689,7 @@ void AddLogData(uint32_t loglevel, const char* log_data, const char* log_data_pa
     }
     snprintf_P(TasmotaGlobal.log_buffer, LOG_BUFFER_SIZE, PSTR("%s%c%c%s%s%s%s\1"),
       TasmotaGlobal.log_buffer, TasmotaGlobal.log_buffer_pointer++, '0'+loglevel, mxtime, log_data, log_data_payload, log_data_retained);
+    if (too_long) { free(too_long); }
     TasmotaGlobal.log_buffer_pointer &= 0xFF;
     if (!TasmotaGlobal.log_buffer_pointer) {
       TasmotaGlobal.log_buffer_pointer++;  // Index 0 is not allowed as it is the end of char string
@@ -2576,6 +2701,9 @@ uint32_t HighestLogLevel() {
   uint32_t highest_loglevel = TasmotaGlobal.seriallog_level;
   if (Settings->weblog_level > highest_loglevel) { highest_loglevel = Settings->weblog_level; }
   if (Settings->mqttlog_level > highest_loglevel) { highest_loglevel = Settings->mqttlog_level; }
+#ifdef USE_UFILESYS
+  if (Settings->filelog_level > highest_loglevel) { highest_loglevel = Settings->filelog_level; }
+#endif  // USE_UFILESYS
   if (TasmotaGlobal.syslog_level > highest_loglevel) { highest_loglevel = TasmotaGlobal.syslog_level; }
   if (TasmotaGlobal.templog_level > highest_loglevel) { highest_loglevel = TasmotaGlobal.templog_level; }
   if (TasmotaGlobal.uptime < 3) { highest_loglevel = LOG_LEVEL_DEBUG_MORE; }  // Log all before setup correct log level
@@ -2621,25 +2749,6 @@ void AddLogMissed(const char *sensor, uint32_t misses)
   AddLog(LOG_LEVEL_DEBUG, PSTR("SNS: %s missed %d"), sensor, SENSOR_MAX_MISS - misses);
 }
 
-void AddLogSpi(bool hardware, uint32_t clk, uint32_t mosi, uint32_t miso) {
-  // Needs optimization
-  uint32_t enabled = (hardware) ? TasmotaGlobal.spi_enabled : TasmotaGlobal.soft_spi_enabled;
-  switch(enabled) {
-    case SPI_MOSI:
-      AddLog(LOG_LEVEL_INFO, PSTR("SPI: %s using GPIO%02d(CLK) and GPIO%02d(MOSI)"),
-        (hardware) ? PSTR("Hardware") : PSTR("Software"), clk, mosi);
-      break;
-    case SPI_MISO:
-      AddLog(LOG_LEVEL_INFO, PSTR("SPI: %s using GPIO%02d(CLK) and GPIO%02d(MISO)"),
-        (hardware) ? PSTR("Hardware") : PSTR("Software"), clk, miso);
-      break;
-    case SPI_MOSI_MISO:
-      AddLog(LOG_LEVEL_INFO, PSTR("SPI: %s using GPIO%02d(CLK), GPIO%02d(MOSI) and GPIO%02d(MISO)"),
-        (hardware) ? PSTR("Hardware") : PSTR("Software"), clk, mosi, miso);
-      break;
-  }
-}
-
 /*********************************************************************************************\
  * HTML and URL encode
 \*********************************************************************************************/
@@ -2662,6 +2771,10 @@ String HtmlEscape(const String unescaped) {
     }
   }
   return result;
+}
+
+String SettingsTextEscaped(uint32_t index) {
+  return HtmlEscape(SettingsText(index));
 }
 
 String UrlEscape(const char *unescaped) {

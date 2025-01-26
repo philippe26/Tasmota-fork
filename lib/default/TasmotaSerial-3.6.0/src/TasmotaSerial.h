@@ -33,6 +33,12 @@
 
 #ifdef ESP32
 #include <HardwareSerial.h>
+
+// IDF 5.2 has changed counting UART channels, SOC_UART_NUM includes now LP UARTS too for ESP32-C6 and -P4
+#ifndef SOC_UART_HP_NUM
+#define SOC_UART_HP_NUM SOC_UART_NUM        // Set new define SOC_UART_HP_NUM in pre IDF 5.2 to SOC_UART_NUM
+#endif
+
 #endif
 
 class TasmotaSerial : public Stream {
@@ -66,6 +72,7 @@ class TasmotaSerial : public Stream {
 #ifdef ESP32
     uint32_t getUart(void) const { return m_uart; }
     HardwareSerial *getesp32hws(void) { return TSerial; }
+    int32_t setConfig(uint32_t config);
 #endif
     bool isValid(void) { return m_valid; }
     bool overflow(void);
@@ -109,7 +116,7 @@ class TasmotaSerial : public Stream {
     uint32_t m_speed;
     uint32_t m_config;
     HardwareSerial *TSerial;
-    int m_uart = 0;
+    uart_port_t m_uart = uart_port_t(0);
 #endif
 
 };

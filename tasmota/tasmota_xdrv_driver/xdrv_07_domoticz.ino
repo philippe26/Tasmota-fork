@@ -135,7 +135,7 @@ void MqttPublishDomoticzFanState(void) {
     Response_P(DOMOTICZ_MESSAGE, (int)DomoticzRelayIdx(1), (0 == fan_speed) ? 0 : 2, svalue, DomoticzBatteryQuality(), DomoticzRssiQuality());
     MqttPublish(domoticz_in_topic);
 
-    Domoticz->fan_debounce = millis();
+    Domoticz->fan_debounce = millis() + 1000;  // 1 second
   }
 }
 
@@ -232,7 +232,8 @@ void DomoticzMqttSubscribe(void) {
     Domoticz->subscribe = false;
     MqttUnsubscribe(stopic);
   }
-  if (!Domoticz->subscribe && any_relay) {
+//  if (!Domoticz->subscribe && any_relay) {  // Fails on MQTT server reconnect
+  if (any_relay) {
     Domoticz->subscribe = true;
     MqttSubscribe(stopic);
   }
@@ -320,7 +321,7 @@ bool DomoticzMqttData(void) {
     if (GetFanspeed() == svalue) {
       return true;  // Stop as already set
     }
-    if (TimePassedSince(Domoticz->fan_debounce) < 1000) {
+    if (!TimeReached(Domoticz->fan_debounce)) {
       return true;  // Stop if device in limbo
     }
     snprintf_P(XdrvMailbox.topic, XdrvMailbox.index, PSTR("/" D_CMND_FANSPEED));
@@ -529,7 +530,7 @@ void DomoticzSensorP1SmartMeter(char *usage1, char *usage2, char *return1, char 
 
 void DomoticzInit(void) {
   if (Settings->flag.mqtt_enabled) {  // SetOption3 - Enable MQTT
-    Domoticz = (Domoticz_t*)calloc(sizeof(Domoticz_t), 1);  // Need calloc to reset registers to 0/false
+    Domoticz = (Domoticz_t*)calloc(1, sizeof(Domoticz_t));  // Need calloc to reset registers to 0/false
     if (nullptr == Domoticz) { return; }
 
     Domoticz->update_flag = true;

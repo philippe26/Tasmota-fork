@@ -552,22 +552,19 @@ void SetLedPowerIdx(uint32_t led, uint32_t state)
 #endif // USE_BUZZER
 }
 
+// update LedPower related to Power relays, when LedMask is set
 void SetLedPower(bool state)
 {
-  if (!PinUsed(GPIO_LEDLNK)) {           // Legacy - Only use LED1 and/or LED2
-/*
-    SetLedPowerIdx(0, state);
-*/
-    // Fix legacy led support 20211016 (Notice: legacy led supports TWO leds max)
-    uint32_t led = (PinUsed(GPIO_LED1, 1)) ? 1 : 0;
-    SetLedPowerIdx(led, state);
-  } else {
-    power_t mask = 1;
-    for (uint32_t i = 0; i < TasmotaGlobal.leds_present; i++) {  // Map leds to power
-      bool tstate = (TasmotaGlobal.power & mask);
-      SetLedPowerIdx(i, tstate);
-      mask <<= 1;
-    }
+  // Removed deprecated old-fashion LedLnk mode  
+  SetLedLink(state);
+  
+  power_t mask = 1;
+  for (uint32_t i = 0; i < TasmotaGlobal.leds_present; i++) {  // Map leds to power
+    if (Settings->ledmask & mask) {
+      // related power relay is selected for led reporting
+      SetLedPowerIdx(i, TasmotaGlobal.power & mask);
+    }    
+    mask <<= 1;
   }
 }
 
@@ -579,21 +576,20 @@ void SetLedPowerAll(uint32_t state)
 }
 
 void SetLedLink(uint32_t state) {
-#ifdef ESP32
-  // HOOK to manage Link led by another drv (eg ShellyPro)
-  uint32_t index = XdrvMailbox.index;
-  XdrvMailbox.index = state;
-  XdrvCall(FUNC_LED_LINK);
-  XdrvMailbox.index = index;
-#endif  // ESP32
-  int led_pin = Pin(GPIO_LEDLNK);
-  uint32_t led_inv = TasmotaGlobal.ledlnk_inverted;
-  if (-1 == led_pin) {                    // Legacy - LED1 is status
-    SetLedPowerIdx(0, state);
-  }
-  else if (led_pin >= 0) {
-    if (state) { state = 1; }
-    digitalWrite(led_pin, (led_inv) ? !state : state);
+  if (TasmotaGlobal.ledlnk_present) {
+    #ifdef ESP32
+      // HOOK to manage Link led by another drv (eg ShellyPro)
+      uint32_t index = XdrvMailbox.index;
+      XdrvMailbox.index = state;
+      XdrvCall(FUNC_LED_LINK);
+      XdrvMailbox.index = index;
+    #endif  // ESP32
+    int led_pin = Pin(GPIO_LEDLNK);
+    uint32_t led_inv = TasmotaGlobal.ledlnk_inverted;
+    if (led_pin >= 0) {
+      if (state) { state = 1; }
+      digitalWrite(led_pin, (led_inv) ? !state : state);
+    }
   }
 #ifdef USE_BUZZER
   BuzzerSetStateToLed(state);
@@ -1350,7 +1346,7 @@ void Every250mSeconds(void)
       if (200 == TasmotaGlobal.blinks) { TasmotaGlobal.blinks = 0; }  // Disable blink
     }
   }
-  if (Settings->ledstate &1 && (PinUsed(GPIO_LEDLNK) || !(TasmotaGlobal.blinks || TasmotaGlobal.restart_flag || TasmotaGlobal.ota_state_flag)) ) {
+  if (Settings->ledstate &1 && (TasmotaGlobal.ledlnk_present || !(TasmotaGlobal.blinks || TasmotaGlobal.restart_flag || TasmotaGlobal.ota_state_flag)) ) {
     bool tstate = TasmotaGlobal.power & Settings->ledmask;
 #ifdef ESP8266
     if ((SONOFF_TOUCH == TasmotaGlobal.module_type) || (SONOFF_T11 == TasmotaGlobal.module_type) || (SONOFF_T12 == TasmotaGlobal.module_type) || (SONOFF_T13 == TasmotaGlobal.module_type)) {
@@ -2359,12 +2355,16 @@ void GpioInit(void)
 #endif
     }
   }
-  DigitalWrite(GPIO_LEDLNK, 0, TasmotaGlobal.ledlnk_inverted);
+
+  if (PinUsed(GPIO_LEDLNK, 0)) {
+    DigitalWrite(GPIO_LEDLNK, 0, TasmotaGlobal.ledlnk_inverted);
+    TasmotaGlobal.ledlnk_present=1;
+  }
 
 #ifdef USE_PWM_DIMMER
   if (PWM_DIMMER == TasmotaGlobal.module_type && PinUsed(GPIO_REL1)) { TasmotaGlobal.devices_present--; }
 #endif  // USE_PWM_DIMMER
 
   SetLedPower(Settings->ledstate &8);
-  SetLedLink(Settings->ledstate &8);
+  //SetLedLink(Settings->ledstate &8);
 }

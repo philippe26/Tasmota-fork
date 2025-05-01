@@ -56,7 +56,7 @@ const uint8_t MAX_KEYS_SET = 32;            // Max number of keys
 // Changes to the following MAX_ defines will impact settings layout
 const uint8_t MAX_INTERLOCKS_SET = 16;      // Max number of interlock groups (MAX_RELAYS_SET / 2)
 const uint8_t MAX_SWITCHES_SET = 32;        // Max number of switches
-const uint8_t MAX_LEDS = 4;                 // Max number of leds
+const uint8_t MAX_LEDS = 32;                // Max number of leds
 const uint8_t MAX_PWMS_LEGACY = 5;          // Max number of PWM channels in first settings block - Legacy limit for ESP8266, but extended for ESP32 (see below)
 #ifdef ESP32                                // Max number of PWM channels (total including extended) - ESP32 only
   #if CONFIG_IDF_TARGET_ESP32

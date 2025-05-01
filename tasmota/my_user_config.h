@@ -647,7 +647,7 @@
 //    #define USE_MCP230xx_ADDR 0x20               // Enable MCP23008/MCP23017 I2C Address to use (Must be within range 0x20 through 0x26 - set according to your wired setup)
 //    #define USE_MCP230xx_OUTPUT                  // Enable MCP23008/MCP23017 OUTPUT support through sensor29 commands (+2k2 code)
 //    #define USE_MCP230xx_DISPLAYOUTPUT           // Enable MCP23008/MCP23017 to display state of OUTPUT pins on Web UI (+0k2 code)
-//  #define USE_MCP23XXX_DRV                       // [I2cDriver77] Enable MCP23xxx support as virtual switch/button/relay (+3k(I2C)/+5k(SPI) code)
+    #define USE_MCP23XXX_DRV                       // [I2cDriver77] Enable MCP23xxx support as virtual switch/button/relay (+3k(I2C)/+5k(SPI) code)
 //  #define USE_PCA9685                            // [I2cDriver1] Enable PCA9685 I2C HW PWM Driver - Must define I2C Address in #define USE_PCA9685_ADDR below - range 0x40 - 0x47 (+1k4 code)
 //  #define USE_PCA9685_V2                         // [I2cDriver1] Enable PCA9685 I2C HW PWM Driver - Must define I2C Address in #define USE_PCA9685_ADDR below - range 0x40 - 0x47 (+3k4 code)
 //    #define USE_PCA9685_ADDR 0x40                // Enable PCA9685 I2C Address to use (Must be within range 0x40 through 0x47 - set according to your wired setup)
@@ -1056,11 +1056,13 @@
   #define SHIFT595_DEVICE_COUNT  1                 // [Shift595DeviceCount] Set the number of connected 74x595 shift registers
 
 //#define USE_TM1638                               // Add support for TM1638 switches copying Switch1 .. Switch8 (+1k code)
-//  #define TM1638_USE_AS_BUTTON                   // Add support for buttons
-//  #define TM1638_USE_AS_SWITCH                   // Add support for switches (default)
 //  #define TM1638_MAX_DISPLAYS    8               // Add support for power control of 8 displayed digits (7 segments)
-//  #define TM1638_MAX_KEYS        8               // Add support for MAX_KEYS (up to 8 keys)
-//  #define TM1638_MAX_LEDS        8               // Add support for MAX_LEDS : up to 16 leds (leds 0..7 connected to SEG9, Leds 8..15 connected to SEG10)
+//  #define TM1638_MAX_KEYS        8               // Add support for MAX_KEYS (up to 8 keys). Could be used as Switch or Button (set following defines)
+  //  #define TM1638_USE_AS_BUTTON                 // Add support for buttons
+  //  #define TM1638_USE_AS_SWITCH                 // Add support for switches (default)
+//  #define TM1638_MAX_LEDS        16              // Add support for MAX_LEDS : up to 16 leds (leds 0..7 connected to SEG9, Leds 8..15 connected to SEG10)
+  //  #define TM1638_USE_AS_RELAYS                 // Add support for relays (MAX_LEDS are driving relays)
+  //  #define TM1638_USE_AS_LEDPOWER               // Add support for ledpower (MAX_LEDS are driving ledpower)
 //#define USE_HX711                                // Add support for HX711 load cell (+1k5 code)
 //  #define USE_HX711_M5SCALES                     // [I2cDriver89] Enable support for M5Unit (Mini)Scales (I2C address 0x26) (+0k4 code)
 //  #define USE_HX711_GUI                          // Add optional web GUI to HX711 as scale (+1k8 code)

@@ -2601,39 +2601,44 @@ void CmndAltitude(void)
 }
 
 void CmndLedPower(void) {
-  // If GPIO_LEDLINK (used for network status) then allow up to 4 GPIO_LEDx control using TasmotaGlobal.led_power
+  TasmotaGlobal.blinks = 0;  
+  // If GPIO_LEDLINK (used for network status) then allow up to MAX_LEDS GPIO_LEDx control using TasmotaGlobal.led_power
   // If no GPIO_LEDLINK then allow legacy single led GPIO_LED1 control using Settings->ledstate
-  if ((XdrvMailbox.index > 0) && (XdrvMailbox.index <= MAX_LEDS)) {
-    if (!PinUsed(GPIO_LEDLNK)) { XdrvMailbox.index = 1; }
-    if ((XdrvMailbox.payload >= 0) && (XdrvMailbox.payload <= 2)) {
-      Settings->ledstate &= 8;                // Disable power control
+  if (TasmotaGlobal.ledlnk_present) {
+    if ((XdrvMailbox.index > 0) && (XdrvMailbox.index <= MAX_LEDS)) {    
       uint32_t mask = 1 << (XdrvMailbox.index -1);        // Led to control
       switch (XdrvMailbox.payload) {
-      case 0: // Off
-        TasmotaGlobal.led_power &= (0xFF ^ mask);
+        case 0: // Off
+          TasmotaGlobal.led_power &= (0xFF ^ mask);
+          break;
+        case 1: // On
+          TasmotaGlobal.led_power |= mask;
+          break;
+        case 2: // Toggle
+          TasmotaGlobal.led_power ^= mask;
+          break;
+      }      
+      SetLedPowerIdx(XdrvMailbox.index -1, (TasmotaGlobal.led_power & mask));      
+    }
+    bool state = bitRead(TasmotaGlobal.led_power, XdrvMailbox.index -1);    
+    //ResponseCmndIdxChar(GetStateText(state));      
+    Response_P(PSTR("{\"%s%d\":\"%d\",\"LEDLNK\":\"%d\",\"LEDS\":\"%d\"}"), XdrvMailbox.command, XdrvMailbox.index, state, TasmotaGlobal.ledlnk_present, TasmotaGlobal.leds_present);
+  } else {
+    Settings->ledstate &= 8;                // Disable power control    
+    switch (XdrvMailbox.payload) {
+      case 0: // Off        
         Settings->ledstate = 0;
         break;
       case 1: // On
-        TasmotaGlobal.led_power |= mask;
         Settings->ledstate = 8;
         break;
       case 2: // Toggle
-        TasmotaGlobal.led_power ^= mask;
         Settings->ledstate ^= 8;
         break;
-      }
-      TasmotaGlobal.blinks = 0;
-      if (!PinUsed(GPIO_LEDLNK)) {
-        SetLedPower(Settings->ledstate &8);
-      } else {
-        SetLedPowerIdx(XdrvMailbox.index -1, (TasmotaGlobal.led_power & mask));
-      }
     }
-    bool state = bitRead(TasmotaGlobal.led_power, XdrvMailbox.index -1);
-    if (!PinUsed(GPIO_LEDLNK)) {
-      state = bitRead(Settings->ledstate, 3);
-    }
-    ResponseCmndIdxChar(GetStateText(state));
+    SetLedPower(Settings->ledstate &8);
+    bool state = bitRead(Settings->ledstate, 3);
+    Response_P(PSTR("{\"%s\":\"%d\",\"LEDLNK\":\"%d\",\"LEDS\":\"%d\"}"), XdrvMailbox.command, state, TasmotaGlobal.ledlnk_present, TasmotaGlobal.leds_present);
   }
 }
 

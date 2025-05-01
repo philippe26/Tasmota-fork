@@ -29,12 +29,15 @@
 
 #define XDRV_66               66
 
+// BUTTON & SWITCH are mutual exclusive
 #ifdef TM1638_USE_AS_BUTTON
 #define TM1638_USE_BUTTONS         // Use keys as buttons
 #endif
 #ifdef TM1638_USE_AS_SWITCH
 #undef TM1638_USE_BUTTONS          // Use keys as switches
 #endif
+
+// Define other parameters if not assigned
 #ifndef TM1638_MAX_DISPLAYS
 #define TM1638_MAX_DISPLAYS   8
 #endif
@@ -69,10 +72,20 @@ struct TM1638 {
   int8_t clock_pin = 0;
   int8_t data_pin = 0;
   int8_t strobe_pin = 0;
-  int8_t key_offset;
-  int8_t led_offset;
+  int8_t key_offset;  
   bool detected = false;
+  
+  uint8_t max_pins;
+  uint8_t relay_max;
+  uint8_t relay_offset;
+  uint32_t relay_inverted;
+  bool base;
+  uint8_t led_offset;
+  uint8_t led_inverted;
+  uint8_t led_max;
 } Tm1638;
+
+uint16_t *Tm1638_gpio_pin = nullptr;
 
 /*********************************************************************************************\
  * Pieces from library https://github.com/rjbatista/tm1638-library
@@ -127,6 +140,37 @@ uint8_t Tm16XXReceive(void) {
 }
 
 /*********************************************************************************************/
+/* Tasmota gpio compatibility */
+
+int Tm1638Pin(uint32_t gpio, uint32_t index = 0);
+int Tm1638Pin(uint32_t gpio, uint32_t index) {
+  uint16_t real_gpio = gpio << 5;
+  uint16_t mask = 0xFFE0;
+  if (index < GPIO_ANY) {
+    real_gpio += index;
+    mask = 0xFFFF;
+  }
+  for (uint32_t i = 0; i <= Tm1638.max_pins; i++) {
+    if ((Tm1638_gpio_pin[i] & mask) == real_gpio) {
+      return i;                                        // Pin number configured for gpio
+    }
+  }
+  return -1;                                           // No pin used for gpio
+}
+
+bool Tm1638PinUsed(uint32_t gpio, uint32_t index = 0);
+bool Tm1638PinUsed(uint32_t gpio, uint32_t index) {
+  return (Tm1638Pin(gpio, index) >= 0);
+}
+
+uint32_t Tm1638GetPin(uint32_t lpin) {
+  if (lpin <= Tm1638.max_pins) {
+    return Tm1638_gpio_pin[lpin];
+  } else {
+    return GPIO_NONE;
+  }
+}
+/*********************************************************************************************/
 
 void Tm1638SetLED(uint8_t color, uint8_t pos) {
   TM16XXSendData((pos << 1) + 1, color);
@@ -144,6 +188,105 @@ uint8_t Tm1638GetButtons(void) {
 
   return keys;
 }
+
+/*********************************************************************************************/
+
+bool Tm1638AddItem(uint8_t &item) {
+  if (item >= 32) {
+    AddLog(LOG_LEVEL_INFO, PSTR("TM1638: Max ITEM reached"));
+    return false;
+  }
+  item++;
+  return true;
+}
+bool Tm1638LoadTemplate(void) {
+  String TmImplt = "";
+  #ifdef USE_UFILESYS
+    TmImplt = TfsLoadString("/tm1638out.dat");
+    AddLog(LOG_LEVEL_INFO, PSTR("TM1638: Loading file /tm1638out.dat => %s"), TmImplt.c_str());
+  #endif  // USE_UFILESYS
+  #ifdef USE_RULES
+    if (!TmImplt.length()) {
+      TmImplt = RuleLoadFile("TM1638OUT.DAT");
+      AddLog(LOG_LEVEL_INFO, PSTR("TM1638: Loading RULES TM1638OUT.dat => %s"), TmImplt.c_str());
+    }
+  #endif  // USE_RULES
+  #ifdef USE_SCRIPT
+    if (!TmImplt.length()) {
+      TmImplt = ScriptLoadSection(">y");
+      AddLog(LOG_LEVEL_INFO, PSTR("TM1638: Loading SCRIPT => %s"), TmImplt.c_str());
+    }
+  #endif  // USE_SCRIPT
+  uint32_t len = TmImplt.length() +1;
+  if (len < 7) { return false; }     // No TmImplt found
+
+  JsonParser parser((char*)TmImplt.c_str());
+  JsonParserObject root = parser.getRootObject();
+  if (!root) { return false; }
+
+  // rule3 on file#Tm1638.dat do {"NAME":"TM1638-16","BASE:1","GPIO":[0,0,0,0,0,0,0,0,0,224,225,226,227,228,229,230,231]} endon
+  // rule3 on file#Tm1638.dat do {"NAME":"TM1638-8","BASE:0","GPIO":[263,262,261,260,259,258,257,256]} endon    
+  JsonParserToken val = root[PSTR(D_JSON_BASE)];
+  if (val) {
+    Tm1638.base = (val.getUInt()) ? true : false;
+  }
+  val = root[PSTR(D_JSON_NAME)];
+  if (val) {
+    AddLog(LOG_LEVEL_DEBUG, PSTR("TM1638: Base %d, Template '%s'"), Tm1638.base, val.getStr());
+  }
+  JsonParserArray arr = root[PSTR(D_JSON_GPIO)];
+  if (arr) {
+    uint32_t pin = 0;
+    for (pin; pin < TM1638_MAX_LEDS; pin++) {        
+      JsonParserToken val = arr[pin];
+      if (!val) { break; }
+      uint16_t mpin = val.getUInt();
+      if (mpin) {                                      // Above GPIO_NONE
+        if ((mpin >= AGPIO(GPIO_REL1)) && (mpin < (AGPIO(GPIO_REL1) + MAX_RELAYS_SET)) && Tm1638AddItem(Tm1638.relay_max)) {
+          
+        }
+        else if ((mpin >= AGPIO(GPIO_REL1_INV)) && (mpin < (AGPIO(GPIO_REL1_INV) + MAX_RELAYS_SET)) && Tm1638AddItem(Tm1638.relay_max)) {
+          bitSet(Tm1638.relay_inverted, mpin - AGPIO(GPIO_REL1_INV));
+          mpin -= (AGPIO(GPIO_REL1_INV) - AGPIO(GPIO_REL1));
+          
+        }
+        else if ((mpin >= AGPIO(GPIO_LED1)) && (mpin < (AGPIO(GPIO_LED1) + MAX_LEDS)) && Tm1638AddItem(Tm1638.led_max)) {                              
+          
+        }
+        else if ((mpin >= AGPIO(GPIO_LED1_INV)) && (mpin < (AGPIO(GPIO_LED1_INV) + MAX_LEDS)) && Tm1638AddItem(Tm1638.led_max)) {
+          bitSet(Tm1638.led_inverted, mpin - AGPIO(GPIO_LED1_INV));
+          mpin -= (AGPIO(GPIO_LED1_INV) - AGPIO(GPIO_LED1));          
+          
+        }
+        else if (mpin == AGPIO(GPIO_LEDLNK) && !TasmotaGlobal.ledlnk_present) {                           
+          TasmotaGlobal.ledlnk_present++;
+          
+        }
+        else if (mpin == AGPIO(GPIO_LEDLNK_INV)&& !TasmotaGlobal.ledlnk_present) {          
+          mpin -= (AGPIO(GPIO_LEDLNK_INV) - AGPIO(GPIO_LEDLNK));                  
+          TasmotaGlobal.ledlnk_present++;
+          TasmotaGlobal.ledlnk_inverted=1;
+        }
+        else if (mpin == AGPIO(GPIO_OUTPUT_HI)) {
+          Tm1638SetLED(TM1638_COLOR_RED , pin);          
+        }
+        else if (mpin == AGPIO(GPIO_OUTPUT_LO)) {          
+          Tm1638SetLED(TM1638_COLOR_NONE, pin);
+        }
+        else { mpin = 0; }
+        Tm1638_gpio_pin[pin] = mpin;
+      }
+    }
+    Tm1638.max_pins = pin;                             // Max number of configured pins
+    AddLog(LOG_LEVEL_INFO, PSTR("TM1638: Pins %d (Relays=%d/Leds=%d/LNK=%d), Base=%d, Offset(R=%d/L=%d)"), Tm1638.max_pins, Tm1638.relay_max, Tm1638.led_max, TasmotaGlobal.ledlnk_present,Tm1638.relay_offset, Tm1638.led_offset);
+  } else {
+    AddLog(LOG_LEVEL_ERROR, PSTR("TM1638: No GPIO defined"));
+  }
+//  AddLog(LOG_LEVEL_DEBUG, PSTR("TM1638: Pins %d, Tm1638_gpio_pin %*_V"), Tm1638.max_pins, Tm1638.max_pins, (uint8_t*)Tm1638_gpio_pin);
+
+  return true;
+}
+
 
 /*********************************************************************************************/
 
@@ -174,8 +317,24 @@ void TmInit(void) {
     }
     digitalWrite(Tm1638.strobe_pin, HIGH);
 
-    Tm1638.led_offset = TasmotaGlobal.devices_present;
-    UpdateDevicesPresent(TM1638_MAX_LEDS);
+
+    Tm1638_gpio_pin = (uint16_t*)calloc(TM1638_MAX_LEDS, 2);
+    if (!Tm1638_gpio_pin) { return; }
+
+    if (!Tm1638LoadTemplate()) {
+      AddLog(LOG_LEVEL_INFO, PSTR("TM1638: No valid template found"));  // Too many GPIO's
+      
+      return;
+    }
+
+    Tm1638.relay_offset = TasmotaGlobal.devices_present;
+    Tm1638.relay_max -= UpdateDevicesPresent(Tm1638.relay_max);
+
+    Tm1638.led_offset = TasmotaGlobal.leds_present; // led_offset is used in case of BASE=0 (relative)
+    TasmotaGlobal.leds_present += Tm1638.led_max;
+    
+    // Set offset to -1 in init phase
+    // offset will be properly assigned during Add_Button/add_switch command
     Tm1638.key_offset = -1;
     Tm1638.detected = true;
   }
@@ -195,18 +354,62 @@ void TmLoop(void) {
 }
 
 void TmPower(void) {
-  power_t rpower = XdrvMailbox.index >> Tm1638.led_offset;
-  for (uint32_t i = 0; i < TM1638_MAX_LEDS; i++) {
-    uint32_t state = rpower &1;
-    if (i<8) {
-      uint8_t color = (state) ? TM1638_COLOR_RED : TM1638_COLOR_NONE;
-      Tm1638SetLED(color, i);
-    } else {
-      uint8_t color = (state) ? TM1638_COLOR_GREEN : TM1638_COLOR_NONE;
-      Tm1638SetLED(color, i);
-    }
-    rpower >>= 1;                             // Select next power
+  // XdrvMailbox.index = 32-bit rpower bit mask
+  // Use absolute relay indexes unique with main template
+  power_t rpower = XdrvMailbox.index;
+  uint32_t relay_max = TasmotaGlobal.devices_present;
+  if (!Tm1638.base) {
+    // Use relative and sequential relay indexes
+    rpower >>= Tm1638.relay_offset;
+    relay_max = Tm1638.relay_max;
   }
+  DevicesPresentNonDisplayOrLight(relay_max);          // Skip display and/or light(s)
+  if (relay_max>TM1638_MAX_LEDS){
+    relay_max=TM1638_MAX_LEDS;
+    // add log
+  }
+
+  for (uint32_t index = 0; index < relay_max; index++) {
+    power_t state = rpower &1;
+    if (Tm1638PinUsed(GPIO_REL1, index)) {
+      state = bitRead(Tm1638.relay_inverted, index) ? !state : state;
+      if (index<8) {
+        uint8_t color = (state) ? TM1638_COLOR_RED : TM1638_COLOR_NONE;
+        Tm1638SetLED(color, index);
+      } else {
+        uint8_t color = (state) ? TM1638_COLOR_GREEN : TM1638_COLOR_NONE;
+        Tm1638SetLED(color, index);
+      }    
+    }
+    rpower >>= 1;                                      // Select next power
+  }
+}
+
+void TmLedPower() {
+  uint32_t index = XdrvMailbox.index;    
+  if (!Tm1638.base) {
+    // Use relative and sequential led indexes
+    index -= Tm1638.led_offset;    
+  }
+  power_t state = bitRead(Tm1638.led_inverted, index) ? !XdrvMailbox.payload : XdrvMailbox.payload;
+  uint8_t color = (state)?TM1638_COLOR_RED : TM1638_COLOR_NONE;
+
+  if (Tm1638PinUsed(GPIO_LED1, index)) {
+    uint32_t pin = Tm1638Pin(GPIO_LED1, index) & 0x3F;   // Fix possible overflow over 63 gpios
+    Tm1638SetLED(color, index);      
+    AddLog(LOG_LEVEL_DEBUG, PSTR("TM1638: TmLedPower %d, Index=%d, Color=%d, pin=0x%x"), XdrvMailbox.index, index, color, pin);
+  }else
+    AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("TM1638: TmLedPower %d, Index=%d, Pin=(not assigned)"), XdrvMailbox.index, index);  
+}
+
+void Tm1638LedLink() {
+  bool state = (XdrvMailbox.index)?true:false;
+  if (TasmotaGlobal.ledlnk_inverted) state = !state;  
+  if (Tm1638PinUsed(GPIO_LEDLNK, 0)) {    
+    uint32_t pin = Tm1638Pin(GPIO_LEDLNK, 0) & 0x3F;   // Fix possible overflow over 63 gpios  
+    Tm1638SetLED((state)?TM1638_COLOR_RED : TM1638_COLOR_NONE, pin);          
+    AddLog(LOG_LEVEL_DEBUG, PSTR("TM1638: LedLink, Pin=%d, state=%d, inverted=%d"), pin, state, TasmotaGlobal.ledlnk_inverted);
+  } 
 }
 
 bool TmAddKey(void) {
@@ -223,6 +426,8 @@ bool TmAddKey(void) {
   XdrvMailbox.index = 0;                      // Default is 0 - Button will also set invert
   return true;
 }
+
+
 
 /*********************************************************************************************\
  * Interface
@@ -251,6 +456,13 @@ bool Xdrv66(uint32_t function) {
       case FUNC_ACTIVE:
         result = true;
         break;
+      case FUNC_LED:
+        TmLedPower();
+      break;
+      case FUNC_LED_LINK:
+        Tm1638LedLink();
+      break;   
+
     }
   }
   return result;

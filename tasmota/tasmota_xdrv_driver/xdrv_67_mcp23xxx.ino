@@ -8,6 +8,7 @@
 
 #if defined(USE_I2C) || defined(USE_SPI)
 #ifdef USE_MCP23XXX_DRV
+
 /*********************************************************************************************\
  * MCP23008/17 (I2C) and MCP23S17 (SPI) GPIO Expander to be used as virtual button/switch/relay only
  *
@@ -184,12 +185,10 @@ struct MCP230 {
   int8_t button_offset;
   int8_t switch_offset;
   bool base;
-  bool interrupt;
-  uint32_t led_link; // only one led link, this field provide the pin assigned
-  uint8_t led_link_inverted;
-  uint8_t led_max;
+  bool interrupt;  
   uint8_t led_offset;
   uint8_t led_inverted;
+  uint8_t led_max;
 } Mcp23x;
 
 uint16_t *Mcp23x_gpio_pin = nullptr;
@@ -489,7 +488,7 @@ uint32_t MCP23xGetPin(uint32_t lpin) {
 
 bool MCP23xAddItem(uint8_t &item) {
   if (item >= MAX_RELAYS_SET) {                        // MAX_RELAYS_SET = MAX_SWITCHES_SET = MAX_KEYS_SET = 32
-    AddLog(LOG_LEVEL_INFO, PSTR("MCP: Max reached"));
+    AddLog(LOG_LEVEL_INFO, PSTR("MCP: Max RELAYS reached"));
     return false;
   }
   item++;
@@ -500,15 +499,18 @@ String MCP23xTemplateLoadFile(void) {
   String mcptmplt = "";
 #ifdef USE_UFILESYS
   mcptmplt = TfsLoadString("/mcp23x.dat");
+  AddLog(LOG_LEVEL_INFO, PSTR("MCP: Loading file /mcp23x.dat => %s"), mcptmplt.c_str());
 #endif  // USE_UFILESYS
 #ifdef USE_RULES
   if (!mcptmplt.length()) {
     mcptmplt = RuleLoadFile("MCP23X.DAT");
+    AddLog(LOG_LEVEL_INFO, PSTR("MCP: Loading RULES mcp23x.dat => %s"), mcptmplt.c_str());
   }
 #endif  // USE_RULES
 #ifdef USE_SCRIPT
   if (!mcptmplt.length()) {
     mcptmplt = ScriptLoadSection(">y");
+    AddLog(LOG_LEVEL_INFO, PSTR("MCP: Loading SCRIPT => %s"), mcptmplt.c_str());
   }
 #endif  // USE_SCRIPT
   return mcptmplt;
@@ -578,28 +580,25 @@ bool MCP23xLoadTemplate(void) {
           mpin -= (AGPIO(GPIO_REL1_INV) - AGPIO(GPIO_REL1));
           MCP23xPinMode(pin, OUTPUT);
         }
-        else if ((mpin >= AGPIO(GPIO_LED1)) && (mpin < (AGPIO(GPIO_LED1) + MAX_LEDS))) {                    
+        else if ((mpin >= AGPIO(GPIO_LED1)) && (mpin < (AGPIO(GPIO_LED1) + MAX_LEDS))&& MCP23xAddItem(Mcp23x.led_max)) {                    
           Mcp23x.led_max++;
           MCP23xPinMode(pin, OUTPUT);
         }
-        else if ((mpin >= AGPIO(GPIO_LED1_INV)) && (mpin < (AGPIO(GPIO_LED1_INV) + MAX_LEDS))) {
+        else if ((mpin >= AGPIO(GPIO_LED1_INV)) && (mpin < (AGPIO(GPIO_LED1_INV) + MAX_LEDS))&& MCP23xAddItem(Mcp23x.led_max)) {
           bitSet(Mcp23x.led_inverted, mpin - AGPIO(GPIO_LED1_INV));
-          mpin -= (AGPIO(GPIO_LED1_INV) - AGPIO(GPIO_LED1));
-          Mcp23x.led_max++;
+          mpin -= (AGPIO(GPIO_LED1_INV) - AGPIO(GPIO_LED1));          
           MCP23xPinMode(pin, OUTPUT);
         }
-        else if (mpin == AGPIO(GPIO_LEDLNK)) {          
-          Mcp23x.led_link=pin;
-          Mcp23x.led_link_inverted=0;
-          MCP23xPinMode(pin, OUTPUT);
-          SetPin(MAX_GPIO_PIN-1, GPIO_LEDLNK); // assign GPIO_LEDLNK for compatibility with tasmota core algorithm
+        else if (mpin == AGPIO(GPIO_LEDLNK)&& !TasmotaGlobal.ledlnk_present) {                           
+          TasmotaGlobal.ledlnk_present++;
+          MCP23xPinMode(pin, OUTPUT);                    
         }
-        else if (mpin == AGPIO(GPIO_LEDLNK_INV)) {          
-          mpin -= (AGPIO(GPIO_LEDLNK_INV) - AGPIO(GPIO_LEDLNK));
-          Mcp23x.led_link=pin;
-          Mcp23x.led_link_inverted=1;
+        else if (mpin == AGPIO(GPIO_LEDLNK_INV)&& !TasmotaGlobal.ledlnk_present) {          
+          mpin -= (AGPIO(GPIO_LEDLNK_INV) - AGPIO(GPIO_LEDLNK));                  
+          TasmotaGlobal.ledlnk_present++;
+          TasmotaGlobal.ledlnk_inverted=1;
           MCP23xPinMode(pin, OUTPUT);
-          SetPin(MAX_GPIO_PIN-1, GPIO_LEDLNK); // assign GPIO_LEDLNK for compatibility with tasmota core algorithm
+          
         }
         else if (mpin == AGPIO(GPIO_OUTPUT_HI)) {
           MCP23xPinMode(pin, OUTPUT);
@@ -614,7 +613,7 @@ bool MCP23xLoadTemplate(void) {
       }
     }
     Mcp23x.max_pins = pin;                             // Max number of configured pins
-    AddLog(LOG_LEVEL_INFO, PSTR("MCP: Pins %d (S%d/B%d/R%d)"), Mcp23x.max_pins, Mcp23x.switch_max, Mcp23x.button_max, Mcp23x.relay_max);
+    AddLog(LOG_LEVEL_INFO, PSTR("MCP: Pins %d (S%d/B%d/R%d/LNK%d)"), Mcp23x.max_pins, Mcp23x.switch_max, Mcp23x.button_max, Mcp23x.relay_max, TasmotaGlobal.ledlnk_present);
   }
 
 //  AddLog(LOG_LEVEL_DEBUG, PSTR("MCP: Pins %d, Mcp23x_gpio_pin %*_V"), Mcp23x.max_pins, Mcp23x.max_pins, (uint8_t*)Mcp23x_gpio_pin);
@@ -646,7 +645,7 @@ void MCP23xModuleInit(void) {
   Mcp23x.iocon.reg = 0b01011000;                      // Default 0x58 = Enable INT mirror, Disable Slew rate, HAEN pins for addressing
   int32_t pins_needed = MCP23xTemplateGpio();
   if (!pins_needed) {
-    AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("MCP: Invalid template"));
+    AddLog(LOG_LEVEL_INFO, PSTR("MCP: Invalid template"));
     return;
   }
 
@@ -756,9 +755,12 @@ void MCP23xModuleInit(void) {
   Mcp23x.relay_offset = TasmotaGlobal.devices_present;
   Mcp23x.relay_max -= UpdateDevicesPresent(Mcp23x.relay_max);
 
-  Mcp23x.led_offset = TasmotaGlobal.leds_present;
-  TasmotaGlobal.leds_present+= Mcp23x.led_max;
+  Mcp23x.led_offset = TasmotaGlobal.leds_present; // led_offset is used in case of BASE=0 (relative)
+  TasmotaGlobal.leds_present += Mcp23x.led_max;
+  Mcp23x.led_max = 0; // fixme: compute remaining max from leds_present and MAX_LEDS
 
+  // Set offset to -1 in init phase
+  // offset will be properly assigned during Add_Button/add_switch command
   Mcp23x.button_offset = -1;
   Mcp23x.switch_offset = -1;
 }
@@ -876,7 +878,7 @@ bool MCP23xAddSwitch(void) {
 
 void MCP23xLedPower() {
   uint32_t index = XdrvMailbox.index;
-  uint32_t state = (XdrvMailbox.payload)?1:0;
+  bool state = (XdrvMailbox.payload)?true:false;  
   if (!Mcp23x.base) {
     // Use relative and sequential led indexes
     index -= Mcp23x.led_offset;    
@@ -884,14 +886,18 @@ void MCP23xLedPower() {
   if (MCP23xPinUsed(GPIO_LED1, index)) {
     uint32_t pin = MCP23xPin(GPIO_LED1, index) & 0x3F;   // Fix possible overflow over 63 gpios
     MCP23xDigitalWrite(pin, bitRead(Mcp23x.led_inverted, index) ? !state : state);    
-  }
+    AddLog(LOG_LEVEL_DEBUG, PSTR("MCP: MCP23xLedPower %d, Index=%d, Pin=0x%x, inverted=%d(0x%x)"), XdrvMailbox.index, index, pin, bitRead(Mcp23x.led_inverted, index), Mcp23x.led_inverted);
+  } else
+    AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("MCP: MCP23xLedPower %d, Index=%d, Pin=(not assigned)"), XdrvMailbox.index, index);  
 }
 
 void MCP23xLedLink() {
-  uint32_t state = (XdrvMailbox.index)?1:0;
-  if (Mcp23x.led_link) {
-    MCP23xDigitalWrite(Mcp23x.led_link, Mcp23x.led_link_inverted? !state : state);
-  }
+  bool state = (XdrvMailbox.index)?true:false;   
+  if (MCP23xPinUsed(GPIO_LEDLNK, 0)) {
+    uint32_t pin = MCP23xPin(GPIO_LEDLNK, 0) & 0x3F;   // Fix possible overflow over 63 gpios  
+    MCP23xDigitalWrite(pin, (TasmotaGlobal.ledlnk_inverted) ? !state : state);
+    AddLog(LOG_LEVEL_DEBUG, PSTR("MCP: MCP23xLedLink, Pin=0x%x, inverted=%d(0x%x)"), pin, TasmotaGlobal.ledlnk_inverted);
+  } 
 }
 /*********************************************************************************************\
  * Interface

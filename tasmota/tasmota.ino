@@ -343,8 +343,8 @@ struct TasmotaGlobal_t {
   uint8_t active_device;                    // Active device in ExecuteCommandPower
   uint8_t sleep;                            // Current copy of Settings->sleep
   uint8_t leds_present;                     // Max number of LED supported
-  uint8_t led_inverted;                     // LED inverted flag (1 = (0 = On, 1 = Off))
-  uint8_t led_power;                        // LED power state
+  power_t led_inverted;                     // LED inverted flag (1 = (0 = On, 1 = Off))
+  power_t led_power;                        // LED power state
   uint8_t ledlnk_present;                   // Link LED assigned
   uint8_t ledlnk_inverted;                  // Link LED inverted flag (1 = (0 = On, 1 = Off))
   // uint8_t pwm_inverted;                     // PWM inverted flag (1 = inverted) -- TODO

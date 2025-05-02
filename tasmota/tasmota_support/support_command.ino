@@ -2609,7 +2609,7 @@ void CmndLedPower(void) {
       uint32_t mask = 1 << (XdrvMailbox.index -1);        // Led to control
       switch (XdrvMailbox.payload) {
         case 0: // Off
-          TasmotaGlobal.led_power &= (0xFF ^ mask);
+          TasmotaGlobal.led_power &= (0xFFFFFFFF ^ mask);
           break;
         case 1: // On
           TasmotaGlobal.led_power |= mask;

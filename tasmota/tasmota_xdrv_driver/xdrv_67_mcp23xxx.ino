@@ -28,6 +28,7 @@
  * NAME  - Template name
  * BASE  - Optional. 0 = use relative buttons and switches (default), 1 = use absolute buttons and switches
  * IOCON - Optional. IOCON I/O Expander configuration register (bitmap: 0 MIRROR 0 DISSLW HAEN ODR INTPOL 0. Default 0b01011000 = 0x58)
+ * TOPOLOGY - Optional. describe pincount@addr of expected devices(MCP23XXX_MAX_DEVICES): example [16 0 8 0 0 16] means that 16pin at 0x20, 8pin at 0x22, 16pins at 0x25 (3 devices connected)
  * GPIO  - Sequential list of pin 1 and up with configured GPIO function
  *         Function             Code      Description
  *         -------------------  --------  ----------------------------------------
@@ -100,6 +101,7 @@
 \*********************************************************************************************/
 
 #define D_JSON_IOCON "IOCON"
+#define D_JSON_TOPO "TOPOLOGY"
 
 enum MCP23S08GPIORegisters {
   MCP23X08_IODIR = 0x00,
@@ -152,8 +154,9 @@ typedef struct {
   uint8_t address;
   uint8_t interface;
   uint8_t pins;                           // 8 (MCP23x08) or 16 (MCP23x17)
+  int8_t expected_pins;                  
   int8_t pin_cs;
-  int8_t pin_int;
+  int8_t pin_int; 
 } tMcp23xDevice;
 
 typedef union {                           // Restricted by MISRA-C Rule 18.4 but so useful...
@@ -171,7 +174,7 @@ typedef union {                           // Restricted by MISRA-C Rule 18.4 but
 } tIOCON;
 
 struct MCP230 {
-  tMcp23xDevice device[MCP23XXX_MAX_DEVICES];
+  tMcp23xDevice device[MCP23XXX_MAX_DEVICES];  
   uint32_t relay_inverted;
   uint32_t button_inverted;
   uint8_t chip;
@@ -459,11 +462,12 @@ int MCP23xPin(uint32_t gpio, uint32_t index = 0);
 int MCP23xPin(uint32_t gpio, uint32_t index) {
   uint16_t real_gpio = gpio << 5;
   uint16_t mask = 0xFFE0;
+  
   if (index < GPIO_ANY) {
     real_gpio += index;
     mask = 0xFFFF;
   }
-  for (uint32_t i = 0; i <= Mcp23x.max_pins; i++) {
+  if (Mcp23x_gpio_pin) for (uint32_t i = 0; i <= Mcp23x.max_pins; i++) {
     if ((Mcp23x_gpio_pin[i] & mask) == real_gpio) {
       return i;                                        // Pin number configured for gpio
     }
@@ -477,7 +481,7 @@ bool MCP23xPinUsed(uint32_t gpio, uint32_t index) {
 }
 
 uint32_t MCP23xGetPin(uint32_t lpin) {
-  if (lpin <= Mcp23x.max_pins) {
+  if ((lpin <= Mcp23x.max_pins) && Mcp23x_gpio_pin) {
     return Mcp23x_gpio_pin[lpin];
   } else {
     return GPIO_NONE;
@@ -612,8 +616,9 @@ bool MCP23xLoadTemplate(void) {
         Mcp23x_gpio_pin[pin] = mpin;
       }
     }
-    Mcp23x.max_pins = pin;                             // Max number of configured pins
-    AddLog(LOG_LEVEL_INFO, PSTR("MCP: Pins %d (S%d/B%d/R%d/LNK%d)"), Mcp23x.max_pins, Mcp23x.switch_max, Mcp23x.button_max, Mcp23x.relay_max, TasmotaGlobal.ledlnk_present);
+    Mcp23x.max_pins = pin;                             // Reduce Max to number of configured pins
+    AddLog(LOG_LEVEL_INFO, PSTR("MCP: Successfully Configured %d Pins : Switch=%d, Buttons=%d, Relays=%d, Leds=%d, LedLNK=%d)"), 
+      Mcp23x.max_pins, Mcp23x.switch_max, Mcp23x.button_max, Mcp23x.relay_max, Mcp23x.led_max, TasmotaGlobal.ledlnk_present);
   }
 
 //  AddLog(LOG_LEVEL_DEBUG, PSTR("MCP: Pins %d, Mcp23x_gpio_pin %*_V"), Mcp23x.max_pins, Mcp23x.max_pins, (uint8_t*)Mcp23x_gpio_pin);
@@ -634,6 +639,20 @@ uint32_t MCP23xTemplateGpio(void) {
   if (val) {
     Mcp23x.iocon.reg = val.getUInt() & 0x5E;          // Only allow 0 MIRROR 0 DISSLW HAEN ODR INTPOL 0
   }
+
+  JsonParserArray topo = root[PSTR(D_JSON_TOPO)];
+  if (topo) {
+    char s[MCP23XXX_MAX_DEVICES+1];    
+    for (int i=0; i< MCP23XXX_MAX_DEVICES; i++) { 
+      JsonParserToken val = topo[i];
+      Mcp23x.device[i].expected_pins= val?val.getUInt():0;      
+    }
+    AddLog(LOG_LEVEL_DEBUG, PSTR("MCP: Topology found in Template, devices checking enabled"));
+  } else {
+    for (int i=0; i< MCP23XXX_MAX_DEVICES; i++) 
+      Mcp23x.device[i].expected_pins=-1; 
+  }
+  
   JsonParserArray arr = root[PSTR(D_JSON_GPIO)];
   if (arr.isArray()) {
     return arr.size();                                // Number of requested pins
@@ -727,7 +746,9 @@ void MCP23xModuleInit(void) {
           Mcp23x.max_pins += Mcp23x.device[Mcp23x.chip].pins;
           pins_needed -= Mcp23x.device[Mcp23x.chip].pins;
         }
-      }
+      } else 
+        Mcp23x.device[Mcp23x.chip].pins = 0;
+
       if (pins_needed) {
         mcp23xxx_address++;
       } else {
@@ -739,7 +760,32 @@ void MCP23xModuleInit(void) {
   }
 #endif  // USE_SPI
 
-  if (!Mcp23x.max_devices) { return; }
+  if (!Mcp23x.max_devices) { 
+    if (Mcp23x.device[0].expected_pins != -1){
+      int pins=0;
+      int devices=0;
+      for (int i=0; i< MCP23XXX_MAX_DEVICES; i++) 
+        if (Mcp23x.device[i].expected_pins>0) {
+          pins += Mcp23x.device[i].expected_pins;
+          devices++;
+        }
+      AddLog(LOG_LEVEL_ERROR, PSTR("MCP: No device found while template requires %d devices (%d pins)"), devices, pins);
+    }    
+    return; 
+  }
+
+  // check compliance of detected device against template
+  if (Mcp23x.device[0].expected_pins != -1) {
+    for (int i=0; i< MCP23XXX_MAX_DEVICES; i++) {          // Max number of detected chip pins  
+      if (Mcp23x.device[i].expected_pins !=  Mcp23x.device[i].pins) {        
+        AddLog(LOG_LEVEL_ERROR, PSTR("MCP: Pin Mismatch vs template - expecting %d pins at address 0x%x - detected %d pins"), 
+          Mcp23x.device[i].expected_pins, i+0x20, Mcp23x.device[i].pins);     
+        return;
+      }        
+    }    
+  } else {
+    AddLog(LOG_LEVEL_DEBUG, PSTR("MCP: No topology check requested"));
+  }
 
   Mcp23x_gpio_pin = (uint16_t*)calloc(Mcp23x.max_pins, 2);
   if (!Mcp23x_gpio_pin) { return; }
@@ -750,6 +796,7 @@ void MCP23xModuleInit(void) {
     return;
   }
 
+  AddLog(LOG_LEVEL_INFO, PSTR("MCP: Topology check sucessful for %d devices and %d pins"), Mcp23x.max_devices, Mcp23x.max_pins);
   AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("MCP: INT open-drain %d"), Mcp23x.iocon.ODR);
 
   Mcp23x.relay_offset = TasmotaGlobal.devices_present;
@@ -918,7 +965,7 @@ bool Xdrv67(uint32_t function) {
 
   if (FUNC_SETUP_RING2 == function) {
     MCP23xModuleInit();
-  } else if (Mcp23x.max_devices) {
+  } else if (Mcp23x_gpio_pin) {
     switch (function) {
       case FUNC_LOOP:
       case FUNC_SLEEP_LOOP:

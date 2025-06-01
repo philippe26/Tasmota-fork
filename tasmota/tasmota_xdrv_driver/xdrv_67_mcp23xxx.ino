@@ -93,6 +93,7 @@
 #endif
 
 #define MCP23XXX_MAX_DEVICES     6
+#define MCP23XXX_MAX_DETECTED_ADDR     (MCP23XXX_ADDR_END-MCP23XXX_ADDR_START+1)
 
 #define MCP23XXX_SPI_CLOCK       1000000  // SPI clock speed set to 1MHz in case of signal interference at higher speed (Max is 10MHz)
 
@@ -153,8 +154,7 @@ typedef struct {
   uint8_t olatb;
   uint8_t address;
   uint8_t interface;
-  uint8_t pins;                           // 8 (MCP23x08) or 16 (MCP23x17)
-  int8_t expected_pins;                  
+  uint8_t pins;                           // 8 (MCP23x08) or 16 (MCP23x17)  
   int8_t pin_cs;
   int8_t pin_int; 
 } tMcp23xDevice;
@@ -174,7 +174,8 @@ typedef union {                           // Restricted by MISRA-C Rule 18.4 but
 } tIOCON;
 
 struct MCP230 {
-  tMcp23xDevice device[MCP23XXX_MAX_DEVICES];  
+  tMcp23xDevice device[MCP23XXX_MAX_DEVICES];  // devices index does not match to device address but the found order (ie device[3] matches to the fourth detected device)
+  int8_t expected_pins[MCP23XXX_MAX_DETECTED_ADDR];  // the expected_pins array matches exactly to device address (ie expected_pins[3] matches address 0x20+3)
   uint32_t relay_inverted;
   uint32_t button_inverted;
   uint8_t chip;
@@ -641,16 +642,15 @@ uint32_t MCP23xTemplateGpio(void) {
   }
 
   JsonParserArray topo = root[PSTR(D_JSON_TOPO)];
-  if (topo) {
-    char s[MCP23XXX_MAX_DEVICES+1];    
-    for (int i=0; i< MCP23XXX_MAX_DEVICES; i++) { 
+  if (topo) {    
+    for (int i=0; i< MCP23XXX_MAX_DETECTED_ADDR; i++) { 
       JsonParserToken val = topo[i];
-      Mcp23x.device[i].expected_pins= val?val.getUInt():0;      
+      Mcp23x.expected_pins[i]= val?val.getUInt():0;      
     }
     AddLog(LOG_LEVEL_DEBUG, PSTR("MCP: Topology found in Template, devices checking enabled"));
   } else {
-    for (int i=0; i< MCP23XXX_MAX_DEVICES; i++) 
-      Mcp23x.device[i].expected_pins=-1; 
+    for (int i=0; i< MCP23XXX_MAX_DETECTED_ADDR; i++) 
+      Mcp23x.expected_pins[i]=-1; 
   }
   
   JsonParserArray arr = root[PSTR(D_JSON_GPIO)];
@@ -750,8 +750,11 @@ void MCP23xModuleInit(void) {
         Mcp23x.device[Mcp23x.chip].pins = 0;
 
       if (pins_needed) {
+        // template requested pins have not been consumed, yet
+        // thus check next adress
         mcp23xxx_address++;
       } else {
+        // all pins assigned from template, thus stop scanning i2c devices
         mcp23xxx_address = MCP23XXX_ADDR_END;
       }
     }
@@ -761,12 +764,12 @@ void MCP23xModuleInit(void) {
 #endif  // USE_SPI
 
   if (!Mcp23x.max_devices) { 
-    if (Mcp23x.device[0].expected_pins != -1){
+    if (Mcp23x.expected_pins[0] != -1){
       int pins=0;
       int devices=0;
-      for (int i=0; i< MCP23XXX_MAX_DEVICES; i++) 
-        if (Mcp23x.device[i].expected_pins>0) {
-          pins += Mcp23x.device[i].expected_pins;
+      for (int i=0; i<MCP23XXX_MAX_DETECTED_ADDR ; i++) 
+        if (Mcp23x.expected_pins[i]>0) {
+          pins += Mcp23x.expected_pins[i];
           devices++;
         }
       AddLog(LOG_LEVEL_ERROR, PSTR("MCP: No device found while template requires %d devices (%d pins)"), devices, pins);
@@ -775,14 +778,28 @@ void MCP23xModuleInit(void) {
   }
 
   // check compliance of detected device against template
-  if (Mcp23x.device[0].expected_pins != -1) {
-    for (int i=0; i< MCP23XXX_MAX_DEVICES; i++) {          // Max number of detected chip pins  
-      if (Mcp23x.device[i].expected_pins !=  Mcp23x.device[i].pins) {        
-        AddLog(LOG_LEVEL_ERROR, PSTR("MCP: Pin Mismatch vs template - expecting %d pins at address 0x%x - detected %d pins"), 
-          Mcp23x.device[i].expected_pins, i+0x20, Mcp23x.device[i].pins);     
+  if (Mcp23x.expected_pins[0] != -1) {
+    uint8_t offset;
+    // check the detected device first
+    for (int i=0; i<Mcp23x.max_devices; i++) {   // Max number of detected chip pins  
+      offset=Mcp23x.device[i].address - MCP23XXX_ADDR_START;
+      if (offset<MCP23XXX_MAX_DETECTED_ADDR) {
+        if  (Mcp23x.expected_pins[offset] !=  Mcp23x.device[i].pins) {        
+          AddLog(LOG_LEVEL_ERROR, PSTR("MCP: Pin Mismatch vs template - expecting %d pins at address 0x%x - detected %d pins"), 
+            Mcp23x.expected_pins[i], Mcp23x.device[i].address, Mcp23x.device[i].pins);     
+          return;
+        }
+        Mcp23x.expected_pins[offset]=-2; // clear detected pins
+      }
+    }   
+    // check if remaining undetected devices
+    for (int i=0; i<MCP23XXX_MAX_DETECTED_ADDR; i++) {   
+      if (Mcp23x.expected_pins[i]>0) {
+        AddLog(LOG_LEVEL_ERROR, PSTR("MCP: Undetected device vs template - expecting %d pins at address 0x%x"), 
+          Mcp23x.expected_pins[i], i+MCP23XXX_ADDR_START);     
         return;
-      }        
-    }    
+      }
+    }
   } else {
     AddLog(LOG_LEVEL_DEBUG, PSTR("MCP: No topology check requested"));
   }
@@ -978,6 +995,7 @@ bool Xdrv67(uint32_t function) {
           MCP23xServiceInput();
         }
         break;
+
       case FUNC_SET_POWER:
         MCP23xPower();
         break;

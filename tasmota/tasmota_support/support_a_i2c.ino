@@ -355,6 +355,7 @@ void I2cScan(uint8_t bus = 0) {
   TwoWire& myWire = I2cGetWire(bus);
   if (&myWire == nullptr) { return; }  // No valid I2c bus
   Response_P(PSTR("{\"" D_CMND_I2CSCAN "\":\"Device(s) found "));
+  ResponseAppend_P(PSTR("using freq=%d Hz "), I2C.frequency[bus]);
 #ifdef USE_I2C_BUS2
   ResponseAppend_P(PSTR("on bus%d "), bus +1);
 #endif

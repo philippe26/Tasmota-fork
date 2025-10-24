@@ -39,7 +39,7 @@ const char kTasmotaCommands[] PROGMEM = "|"  // No prefix
   D_CMND_WIFIPOWER "|" D_CMND_TEMPOFFSET "|" D_CMND_HUMOFFSET "|" D_CMND_SPEEDUNIT "|" D_CMND_GLOBAL_TEMP "|" D_CMND_GLOBAL_HUM"|" D_CMND_GLOBAL_PRESS "|" D_CMND_SWITCHTEXT "|" D_CMND_WIFISCAN "|" D_CMND_WIFITEST "|"
   D_CMND_ZIGBEE_BATTPERCENT "|"
 #ifdef USE_I2C
-  D_CMND_I2CSCAN "|" D_CMND_I2CDRIVER "|"
+  D_CMND_I2CSCAN "|" D_CMND_I2CDRIVER "|" D_CMND_I2CSPEED "|"
 #endif
 #ifdef USE_DEVICE_GROUPS
   D_CMND_DEVGROUP_NAME "|"
@@ -82,7 +82,7 @@ void (* const TasmotaCommand[])(void) PROGMEM = {
   &CmndWifiPower, &CmndTempOffset, &CmndHumOffset, &CmndSpeedUnit, &CmndGlobalTemp, &CmndGlobalHum, &CmndGlobalPress, &CmndSwitchText, &CmndWifiScan, &CmndWifiTest,
   &CmndBatteryPercent,
 #ifdef USE_I2C
-  &CmndI2cScan, &CmndI2cDriver,
+  &CmndI2cScan, &CmndI2cDriver,&CmndI2cSpeed,
 #endif
 #ifdef USE_DEVICE_GROUPS
   &CmndDevGroupName,
@@ -2826,6 +2826,19 @@ void CmndI2cDriver(void)
   }
   Response_P(PSTR("{\"" D_CMND_I2CDRIVER "\":"));
   I2cDriverState();
+  ResponseJsonEnd();
+}
+void CmndI2cSpeed (void)
+{
+  if ((XdrvMailbox.payload >= 0) && (XdrvMailbox.index<=2)) {
+    // index in range 1..N, where bus in range 0..N-1
+    // payload is the frequency in hertz
+    I2cSetClock(XdrvMailbox.payload, XdrvMailbox.index-1);   
+  }
+  Response_P(PSTR("{\"" D_CMND_I2CSPEED "\":"));
+  for (int i=0; i<2; i++) {
+    ResponseAppend_P(PSTR(" %d Hz on Bus%d (%s)"), I2C.frequency[i],i, (TasmotaGlobal.i2c_enabled[i])?"Active":"Disabled");        
+  }  
   ResponseJsonEnd();
 }
 #endif  // USE_I2C

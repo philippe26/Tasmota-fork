@@ -2833,7 +2833,7 @@ void CmndI2cSpeed (void)
   if ((XdrvMailbox.payload >= 0) && (XdrvMailbox.index<=2)) {
     // index in range 1..N, where bus in range 0..N-1
     // payload is the frequency in hertz
-    I2cSetClock(XdrvMailbox.payload, XdrvMailbox.index-1);   
+    I2cSetClock(XdrvMailbox.payload, XdrvMailbox.index-1,true);   
   }
   Response_P(PSTR("{\"" D_CMND_I2CSPEED "\":"));
   for (int i=0; i<2; i++) {

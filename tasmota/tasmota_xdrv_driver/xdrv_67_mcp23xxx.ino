@@ -292,9 +292,9 @@ bool MCP23xValidRead(uint8_t reg, uint8_t *data) {
 #ifdef USE_I2C
   if (MCP23X_I2C == Mcp23x.device[Mcp23x.chip].interface) {
     return I2cValidRead8(data, Mcp23x.device[Mcp23x.chip].address, reg);
-  }
-  return false;
+  }  
 #endif
+return false;
 }
 
 void MCP23xWrite(uint8_t reg, uint8_t value) {

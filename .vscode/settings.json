@@ -1,4 +1,5 @@
 {
+    "terminal.integrated.cwd": "${workspaceFolder}",
     "platformio-ide.toolbar": [
       {
         "text": "$(home)",

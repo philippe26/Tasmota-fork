@@ -63,6 +63,8 @@ struct {
   uint8_t index;
   uint8_t valid;
   int8_t pins_id;
+  uint16_t fail_count;       // consecutive read failure counter
+  bool reported_failed;  // true = silence mode active, waiting for reconnection
 #ifdef DS18x20_USE_ID_ALIAS
   char *alias = (char*)calloc(DS18X20_ALIAS_LEN, 1);
 #endif //DS18x20_USE_ID_ALIAS
@@ -96,6 +98,38 @@ void Ds18x20Init(void) {
   }
   Ds18x20Search();
   AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DSB D_SENSORS_FOUND " %d"), DS18X20Data.sensors);
+
+   // Log all discovered sensors with address, bus and alias (sorted order via index)
+  for (uint32_t i = 0; i < DS18X20Data.sensors; i++) {
+    uint32_t idx = ds18x20_sensor[i].index;
+
+    // Build full 8-byte address string
+    char address[17];
+    for (uint32_t j = 0; j < 8; j++) {
+      sprintf(address + 2*j, "%02X", ds18x20_sensor[idx].address[7-j]);
+    }
+
+#ifdef DS18x20_USE_ID_ALIAS
+    // Include alias if defined and not default '0'
+    if (ds18x20_sensor[idx].alias[0] && (ds18x20_sensor[idx].alias[0] != '0')) {
+      AddLog(LOG_LEVEL_INFO, PSTR(D_LOG_DSB "Sensor %d: addr=%s bus=%d alias=%s"),
+        i + 1,
+        address,
+        ds18x20_sensor[idx].pins_id,
+        ds18x20_sensor[idx].alias);
+    } else {
+      AddLog(LOG_LEVEL_INFO, PSTR(D_LOG_DSB "Sensor %d: addr=%s bus=%d (no alias)"),
+        i + 1,
+        address,
+        ds18x20_sensor[idx].pins_id);
+    }
+#else
+    AddLog(LOG_LEVEL_INFO, PSTR(D_LOG_DSB "Sensor %d: addr=%s bus=%d"),
+      i + 1,
+      address,
+      ds18x20_sensor[idx].pins_id);
+#endif
+  }
 }
 
 void Ds18x20Search(void) {
@@ -274,20 +308,29 @@ void Ds18x20EverySecond(void) {
           result =  true;
           break;
         }
-      }
-      if (!result)
-        AddLog(LOG_LEVEL_ERROR, PSTR("Read sensor %u failed in Ds18x20EverySecond."), i);
-
+      }      
       if (result) {   // Read temperature
+        if (ds18x20_sensor[i].reported_failed) {
+          // Reconnection detected: log recovery with failure count
+          Ds18x20Name(i);
+          AddLog(LOG_LEVEL_ERROR, PSTR("DS18: Sensor '%s' reconnected after %d seconds"), DS18X20Data.name, ds18x20_sensor[i].fail_count);
+          ds18x20_sensor[i].reported_failed = false;
+        }
+        
         if (Settings->flag5.ds18x20_mean) {
           if (ds18x20_sensor[i].numread++ == 0) {
             ds18x20_sensor[i].temp_sum = 0;
           }
           ds18x20_sensor[i].temp_sum += t;
         }
-      } else {
-        Ds18x20Name(i);
-        AddLogMissed(DS18X20Data.name, ds18x20_sensor[ds18x20_sensor[i].index].valid);
+      } else {        
+        if (!ds18x20_sensor[i].reported_failed) {
+          AddLog(LOG_LEVEL_ERROR, PSTR("Read sensor %u failed in Ds18x20EverySecond."), i);
+          Ds18x20Name(i);
+          AddLogMissed(DS18X20Data.name, ds18x20_sensor[ds18x20_sensor[i].index].valid);
+          ds18x20_sensor[i].reported_failed=true;
+        }
+        ds18x20_sensor[i].fail_count++;
       }
     }
   }
@@ -298,6 +341,12 @@ void Ds18x20Show(bool json) {
 
   uint8_t dsxflg = 0;
   for (uint32_t i = 0; i < DS18X20Data.sensors; i++) {
+
+    // Silence mode active: skip read and do not publish → Berry sees nil
+    if (ds18x20_sensor[i].reported_failed) {
+      continue;
+    }
+
 #ifdef W1_PARASITE_POWER
     // With parasite power read one sensor at a time
     if (ds18x20_sensor[i].valid) {

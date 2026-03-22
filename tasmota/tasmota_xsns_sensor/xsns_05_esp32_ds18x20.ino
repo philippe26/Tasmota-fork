@@ -83,6 +83,28 @@ struct {
 
 /********************************************************************************************/
 
+void Ds18x20LogDiscovered(void) {
+  for (uint32_t i = 0; i < DS18X20Data.sensors; i++) {
+    uint32_t idx = ds18x20_sensor[i].index;
+    char address[17];
+    for (uint32_t j = 0; j < 8; j++) {
+      sprintf(address + 2*j, "%02X", ds18x20_sensor[idx].address[7-j]);
+    }
+#ifdef DS18x20_USE_ID_ALIAS
+    if (ds18x20_sensor[idx].alias[0] && (ds18x20_sensor[idx].alias[0] != '0')) {
+      AddLog(LOG_LEVEL_INFO, PSTR(D_LOG_DSB "Sensor %d: addr=%s bus=%d alias=%s"),
+        i + 1, address, ds18x20_sensor[idx].pins_id, ds18x20_sensor[idx].alias);
+    } else {
+      AddLog(LOG_LEVEL_INFO, PSTR(D_LOG_DSB "Sensor %d: addr=%s bus=%d (no alias)"),
+        i + 1, address, ds18x20_sensor[idx].pins_id);
+    }
+#else
+    AddLog(LOG_LEVEL_INFO, PSTR(D_LOG_DSB "Sensor %d: addr=%s bus=%d"),
+      i + 1, address, ds18x20_sensor[idx].pins_id);
+#endif
+  }
+}
+
 void Ds18x20Init(void) {
   DS18X20Data.retryRead = 0;
   DS18X20Data.gpios = 0;
@@ -99,37 +121,7 @@ void Ds18x20Init(void) {
   Ds18x20Search();
   AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DSB D_SENSORS_FOUND " %d"), DS18X20Data.sensors);
 
-   // Log all discovered sensors with address, bus and alias (sorted order via index)
-  for (uint32_t i = 0; i < DS18X20Data.sensors; i++) {
-    uint32_t idx = ds18x20_sensor[i].index;
-
-    // Build full 8-byte address string
-    char address[17];
-    for (uint32_t j = 0; j < 8; j++) {
-      sprintf(address + 2*j, "%02X", ds18x20_sensor[idx].address[7-j]);
-    }
-
-#ifdef DS18x20_USE_ID_ALIAS
-    // Include alias if defined and not default '0'
-    if (ds18x20_sensor[idx].alias[0] && (ds18x20_sensor[idx].alias[0] != '0')) {
-      AddLog(LOG_LEVEL_INFO, PSTR(D_LOG_DSB "Sensor %d: addr=%s bus=%d alias=%s"),
-        i + 1,
-        address,
-        ds18x20_sensor[idx].pins_id,
-        ds18x20_sensor[idx].alias);
-    } else {
-      AddLog(LOG_LEVEL_INFO, PSTR(D_LOG_DSB "Sensor %d: addr=%s bus=%d (no alias)"),
-        i + 1,
-        address,
-        ds18x20_sensor[idx].pins_id);
-    }
-#else
-    AddLog(LOG_LEVEL_INFO, PSTR(D_LOG_DSB "Sensor %d: addr=%s bus=%d"),
-      i + 1,
-      address,
-      ds18x20_sensor[idx].pins_id);
-#endif
-  }
+  Ds18x20LogDiscovered();
 }
 
 void Ds18x20Search(void) {
@@ -426,13 +418,60 @@ void CmndDSRescan(void) {
     retries = atoi(ArgV(argument, 2));
   }
   
+#ifdef DS18x20_USE_ID_ALIAS
+  // Save alias content indexed by sensor address (unique identifier)
+  // Key = full 8-byte address, Value = alias string
+  struct { uint8_t address[8]; char alias[DS18X20_ALIAS_LEN]; } saved[DS18X20_MAX_SENSORS];
+  uint8_t saved_count = 0;
+  for (uint32_t i = 0; i < DS18X20Data.sensors; i++) {
+    uint32_t idx = ds18x20_sensor[i].index;
+    if (ds18x20_sensor[idx].alias[0] && ds18x20_sensor[idx].alias[0] != '0') {
+      memcpy(saved[saved_count].address, ds18x20_sensor[idx].address, 8);
+      strncpy(saved[saved_count].alias, ds18x20_sensor[idx].alias, DS18X20_ALIAS_LEN);
+      saved_count++;
+    }
+  }
+
+  // Save alias pointers before memset to avoid memory leak
+  char *alias_ptrs[DS18X20_MAX_SENSORS];
+  for (int i = 0; i < DS18X20_MAX_SENSORS; i++) {
+    alias_ptrs[i] = ds18x20_sensor[i].alias;
+  }
+#endif
+
   DS18X20Data.sensors = 0;
   memset(&ds18x20_sensor, 0, sizeof(ds18x20_sensor));
+
+#ifdef DS18x20_USE_ID_ALIAS
+  // Restore pointers only (content reset to '0') — prevents memory leak
+  for (int i = 0; i < DS18X20_MAX_SENSORS; i++) {
+    ds18x20_sensor[i].alias = alias_ptrs[i];
+    ds18x20_sensor[i].alias[0] = '0';  // no alias by default
+  }
+#endif
 
   while ((DS18X20Data.sensors < sensorsToFind) && (retries-- > 0)) {
     Ds18x20Search();
     AddLog(LOG_LEVEL_ERROR, PSTR(D_LOG_DSB D_SENSORS_FOUND " %d"), DS18X20Data.sensors);
   }
+
+#ifdef DS18x20_USE_ID_ALIAS
+  // Reassign aliases by matching sensor address — order-independent
+  for (uint32_t i = 0; i < DS18X20Data.sensors; i++) {
+    uint32_t idx = ds18x20_sensor[i].index;
+    for (uint32_t s = 0; s < saved_count; s++) {
+      if (memcmp(ds18x20_sensor[idx].address, saved[s].address, 8) == 0) {
+        // Same physical sensor found again: restore its alias
+        strncpy(ds18x20_sensor[idx].alias, saved[s].alias, DS18X20_ALIAS_LEN);
+        AddLog(LOG_LEVEL_INFO, PSTR(D_LOG_DSB "Alias '%s' restored for rediscovered sensor"), saved[s].alias);
+        break;
+      }
+    }
+    // No match found: new sensor, alias stays '0' (no alias)
+  }
+#endif  
+
+  Ds18x20LogDiscovered();
 
   Response_P(PSTR("{"));
   for (uint32_t i = 0; i < DS18X20Data.sensors; i++) {

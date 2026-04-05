@@ -96,8 +96,11 @@ void ButtonSetVirtualPinState(uint32_t index, uint32_t state) {
 }
 
 uint8_t ButtonGetState(uint32_t index) {
-  // Get current state
-  return Button.debounced_state[index];
+  // Return normalized pressed state: 1=PRESSED, 0=NOT_PRESSED regardless of inversion
+  // debounced_state encodes not_activated: 0=activated(pressed), 1=not_activated(released)
+  // For non-inverted buttons: pressed => debounced_state=0 => return 1
+  // For inverted buttons:     pressed => debounced_state=1 => XOR 1 => 0 => NOT => return 1
+  return !( Button.debounced_state[index] ^ (uint8_t)bitRead(Button.inverted_mask, index) );
 }
 
 uint8_t ButtonLastState(uint32_t index) {

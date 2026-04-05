@@ -894,6 +894,24 @@ extern "C" {
     be_raise(vm, kTypeError, nullptr);
   }
 
+  // get button debounced state (0-based index)
+  // Returns 0 (NOT_PRESSED) or 1 (PRESSED), or nil if index out of range
+  // Berry: tasmota.get_button_state(idx:int) -> int or nil
+  int32_t l_getbuttonstate(bvm *vm);
+  int32_t l_getbuttonstate(bvm *vm) {
+    int32_t top = be_top(vm);
+    if (top >= 2 && be_isint(vm, 2)) {
+      int32_t idx = be_toint(vm, 2);
+      if (idx >= 0 && idx < MAX_KEYS_SET) {
+        be_pushint(vm, ButtonGetState(idx));  // 1=PRESSED, 0=NOT_PRESSED (normalized, inversion-independent)
+        be_return(vm);
+      } else {
+        be_return_nil(vm);
+      }
+    }
+    be_return_nil(vm);
+  }
+
   // get power
   int32_t l_getswitch(bvm *vm);
   int32_t l_getswitch(bvm *vm) {

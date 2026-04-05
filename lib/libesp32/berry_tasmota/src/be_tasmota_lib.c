@@ -62,6 +62,7 @@ extern int l_getlight(bvm *vm);
 extern int l_setlight(bvm *vm);
 extern int l_getpower(bvm *vm);
 extern int l_setpower(bvm *vm);
+extern int l_getbuttonstate(bvm *vm);
 extern int l_getswitch(bvm *vm);
 
 extern int l_i2cenabled(bvm *vm);
@@ -151,6 +152,7 @@ class be_class_tasmota (scope: global, name: Tasmota) {
 
     get_power, func(l_getpower)
     set_power, func(l_setpower)
+    get_button_state, func(l_getbuttonstate)
     get_switch, func(l_getswitch)     // deprecated
     get_switches, func(l_getswitch)
 

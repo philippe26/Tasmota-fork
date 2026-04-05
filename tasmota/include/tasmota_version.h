@@ -26,13 +26,14 @@
 
 /* custom Builds
    0x03: official arends delivery
-   0x80: Add led support (including mpc23xx and TM1638 drivers) 
+   0x80: Add led support (including mpc23xx and TM1638 drivers)
    0x82: Add topology support for MCP23xx (enforce i2c address recognition)
    0x83: Add information of assigned power of display
    0x84: Bugfix I2C speed (restore proper value) & add i2cSpeed command
    0x85: Prevent flooding of readsensors logs when sensors DS18B20 is disconnected
+   0x86: Add tasmota.get_button_state(idx) Berry binding to read debounced button state
 */
-#define TASMOTA_BUILD      0x85
+#define TASMOTA_BUILD      0x86
 
 const uint32_t TASMOTA_VERSION = 0x0E040100 + TASMOTA_BUILD;   // 14.4.1.build
 

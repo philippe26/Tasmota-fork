@@ -52,3 +52,8 @@ lib/libesp32/berry/berry
 ## Python virtual environments for Platformio ##
 venv
 .venv
+
+## Private/personal config files — never commit ########
+platformio_override.ini
+platformio_tasmota_cenv.ini
+tasmota/user_config_override.h

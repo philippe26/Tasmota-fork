@@ -229,7 +229,8 @@ enum UserSelectablePins {
   GPIO_I2C_SER_TX, GPIO_I2C_SER_RX,     // I2C via Serial using SC18IM704 protocol (xdrv74)
   GPIO_TM1640CLK, GPIO_TM1640DIN,       // TM1640 (16 x seven-segment LED controler)
   GPIO_TWAI_TX, GPIO_TWAI_RX, GPIO_TWAI_BO, GPIO_TWAI_CLK,  // ESP32 TWAI serial interface
-  GPIO_SENSOR_END };
+  GPIO_LED1_INV_OPENDRAIN,             // 32 x Leds inverted open-drain (MCP23xxx only: LED ON = OUTPUT LOW, LED OFF = INPUT high-Z)  
+  GPIO_SENSOR_END }; // GPIO_SENSOR_END=368, GPIO_LED1_INV_OPENDRAIN=367
 
 // Error as warning to rethink GPIO usage with max 2045
 static_assert(GPIO_SENSOR_END < 2000, "Too many UserSelectablePins");
@@ -571,6 +572,7 @@ const uint16_t kGpioNiceList[] PROGMEM = {
   AGPIO(GPIO_REL1_BI_INV) + AGMAX(MAX_RELAYS),
   AGPIO(GPIO_LED1) + AGMAX(MAX_LEDS),            // Leds
   AGPIO(GPIO_LED1_INV) + AGMAX(MAX_LEDS),
+  AGPIO(GPIO_LED1_INV_OPENDRAIN) + AGMAX(MAX_LEDS),  // Leds inverted open-drain (MCP23xxx only)
 #ifdef USE_COUNTER
   AGPIO(GPIO_CNTR1) + AGMAX(MAX_COUNTERS),       // Counters
   AGPIO(GPIO_CNTR1_NP) + AGMAX(MAX_COUNTERS),
@@ -582,7 +584,7 @@ const uint16_t kGpioNiceList[] PROGMEM = {
   AGPIO(GPIO_BUZZER_INV),                        // Inverted buzzer
 #endif
   AGPIO(GPIO_LEDLNK),                            // Link led
-  AGPIO(GPIO_LEDLNK_INV),                        // Inverted link led
+  AGPIO(GPIO_LEDLNK_INV),                        // Inverted link led  
 #ifdef USE_BERRY
   AGPIO(GPIO_INPUT) + AGMAX(MAX_SWITCHES),       // Pure digital input to be read via Berry
   AGPIO(GPIO_INTERRUPT) + AGMAX(MAX_SWITCHES),   // Interrupt pins to be catched by Berry

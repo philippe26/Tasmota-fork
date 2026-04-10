@@ -32,8 +32,9 @@
    0x84: Bugfix I2C speed (restore proper value) & add i2cSpeed command
    0x85: Prevent flooding of readsensors logs when sensors DS18B20 is disconnected
    0x86: Add tasmota.get_button_state(idx) Berry binding to read debounced button state
+   0x87: Add support for led opendrain configuration for gpio (GPIO_LED1_INV_OPENDRAIN: 11744+)
 */
-#define TASMOTA_BUILD      0x86
+#define TASMOTA_BUILD      0x87
 
 const uint32_t TASMOTA_VERSION = 0x0E040100 + TASMOTA_BUILD;   // 14.4.1.build
 

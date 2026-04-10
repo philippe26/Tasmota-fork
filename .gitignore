@@ -48,6 +48,7 @@ lib/libesp32/berry/berry
 .vscode/extensions.json
 *.bak
 *.code-workspace
+*.bak*
 
 ## Python virtual environments for Platformio ##
 venv

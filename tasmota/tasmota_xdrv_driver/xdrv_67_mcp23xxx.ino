@@ -41,10 +41,16 @@
  *         Switch_n1..28   Sn   192..219  Switch to Gnd without internal pullup
  *         Relay1..32      R    224..255  Relay
  *         Relay_i1..32    Ri   256..287  Relay inverted
- *         Led1..4         L    288..291  Led
- *         Led_i1..4       Li   320..323  Led inverted
- *         LedLink         LNK  544       Led link
- *         LedLink_i       LNKi 576       Led Link inverted
+ *         Led1..32        L    288..319  Led
+ *         Led_i1..32      Li   320..351  Led inverted
+ *         Led_odi1..32    Lodi 11744..11775  Led inverted open-drain (MCP23xxx only)
+ *                                        LED ON = OUTPUT LOW (sink), LED OFF = INPUT high-Z (no push-pull HIGH)
+ *                                        Use when LEDs are powered from a voltage higher than MCP VDD (e.g. 5V LEDs with 3.3V MCP)
+ *         LedLink         LNK   544       Led link (push-pull)
+ *         LedLink_i       LNKi  576       Led link inverted (push-pull)
+ *         LedLink_od      LNKod 545     Led link open-drain (MCP23xxx only)
+ *         LedLink_odi     LNKodi 577    Led link inverted open-drain (MCP23xxx only)
+ *                                        LED ON = OUTPUT LOW (sink), LED OFF = INPUT high-Z
  *         Output_Hi       Oh   3840      Fixed output high
  *         Output_lo       Ol   3872      Fixed output low
  *
@@ -192,7 +198,9 @@ struct MCP230 {
   bool interrupt;  
   uint8_t led_offset;
   uint8_t led_inverted;
+  uint32_t led_opendrain;              // bitmask: bit n set = led index n uses open-drain emulation
   uint8_t led_max;
+  bool ledlnk_opendrain;              // true = ledlink uses open-drain emulation (LED ON = OUTPUT LOW, LED OFF = INPUT high-Z)
 } Mcp23x;
 
 uint16_t *Mcp23x_gpio_pin = nullptr;
@@ -591,20 +599,29 @@ bool MCP23xLoadTemplate(void) {
         }
         else if ((mpin >= AGPIO(GPIO_LED1_INV)) && (mpin < (AGPIO(GPIO_LED1_INV) + MAX_LEDS))&& MCP23xAddItem(Mcp23x.led_max)) {
           bitSet(Mcp23x.led_inverted, mpin - AGPIO(GPIO_LED1_INV));
-          mpin -= (AGPIO(GPIO_LED1_INV) - AGPIO(GPIO_LED1));          
+          mpin -= (AGPIO(GPIO_LED1_INV) - AGPIO(GPIO_LED1));
           MCP23xPinMode(pin, OUTPUT);
         }
-        else if (mpin == AGPIO(GPIO_LEDLNK)&& !TasmotaGlobal.ledlnk_present) {                           
+        else if ((mpin >= AGPIO(GPIO_LED1_INV_OPENDRAIN)) && (mpin < (AGPIO(GPIO_LED1_INV_OPENDRAIN) + MAX_LEDS)) && MCP23xAddItem(Mcp23x.led_max)) {
+          uint8_t led_index = mpin - AGPIO(GPIO_LED1_INV_OPENDRAIN);
+          bitSet(Mcp23x.led_inverted, led_index);
+          bitSet(Mcp23x.led_opendrain, led_index);
+          mpin -= (AGPIO(GPIO_LED1_INV_OPENDRAIN) - AGPIO(GPIO_LED1));
+          // Open-drain: start as INPUT (high-Z = LED OFF)
+          MCP23xPinMode(pin, INPUT);
+        }
+        else if ((mpin >= AGPIO(GPIO_LEDLNK) && (mpin <= (AGPIO(GPIO_LEDLNK)+1))) && !TasmotaGlobal.ledlnk_present) {                           
+          Mcp23x.ledlnk_opendrain = (mpin - AGPIO(GPIO_LEDLNK)) ? true: false;
           TasmotaGlobal.ledlnk_present++;
           MCP23xPinMode(pin, OUTPUT);                    
         }
-        else if (mpin == AGPIO(GPIO_LEDLNK_INV)&& !TasmotaGlobal.ledlnk_present) {          
-          mpin -= (AGPIO(GPIO_LEDLNK_INV) - AGPIO(GPIO_LEDLNK));                  
+        else if ((mpin >= AGPIO(GPIO_LEDLNK_INV) && (mpin <= (AGPIO(GPIO_LEDLNK_INV)+1))) && !TasmotaGlobal.ledlnk_present) {
+          Mcp23x.ledlnk_opendrain = (mpin - AGPIO(GPIO_LEDLNK_INV)) ? true: false;
+          mpin -= (AGPIO(GPIO_LEDLNK_INV) - AGPIO(GPIO_LEDLNK));
           TasmotaGlobal.ledlnk_present++;
           TasmotaGlobal.ledlnk_inverted=1;
           MCP23xPinMode(pin, OUTPUT);
-          
-        }
+        }        
         else if (mpin == AGPIO(GPIO_OUTPUT_HI)) {
           MCP23xPinMode(pin, OUTPUT);
           MCP23xDigitalWrite(pin, 1);
@@ -942,26 +959,50 @@ bool MCP23xAddSwitch(void) {
 
 void MCP23xLedPower() {
   uint32_t index = XdrvMailbox.index;
-  bool state = (XdrvMailbox.payload)?true:false;  
+  bool state = (XdrvMailbox.payload)?true:false;
   if (!Mcp23x.base) {
     // Use relative and sequential led indexes
-    index -= Mcp23x.led_offset;    
+    index -= Mcp23x.led_offset;
   }
   if (MCP23xPinUsed(GPIO_LED1, index)) {
     uint32_t pin = MCP23xPin(GPIO_LED1, index) & 0x3F;   // Fix possible overflow over 63 gpios
-    MCP23xDigitalWrite(pin, bitRead(Mcp23x.led_inverted, index) ? !state : state);    
-    AddLog(LOG_LEVEL_DEBUG, PSTR("MCP: MCP23xLedPower %d, Index=%d, Pin=0x%x, inverted=%d(0x%x)"), XdrvMailbox.index, index, pin, bitRead(Mcp23x.led_inverted, index), Mcp23x.led_inverted);
+    bool out = bitRead(Mcp23x.led_inverted, index) ? !state : state;
+    if (bitRead(Mcp23x.led_opendrain, index)) {
+      // Open-drain emulation: ON = high Z, OFF = OUTPUT LOW (sink current)      
+      if (out) {
+        MCP23xPinMode(pin, INPUT);   // high-Z: no current path
+      } else {
+        MCP23xPinMode(pin, OUTPUT);  // Low : sink current  
+        MCP23xDigitalWrite(pin, 0);
+      }  
+      AddLog(LOG_LEVEL_DEBUG, PSTR("MCP: MCP23xLedPower %d, Index=%d, Pin=0x%x, open-drain, state=%d"), XdrvMailbox.index, index, pin, state);
+    } else {
+      MCP23xDigitalWrite(pin, out);
+      AddLog(LOG_LEVEL_DEBUG, PSTR("MCP: MCP23xLedPower %d, Index=%d, Pin=0x%x, inverted=%d(0x%x)"), XdrvMailbox.index, index, pin, bitRead(Mcp23x.led_inverted, index), Mcp23x.led_inverted);
+    }
   } else
-    AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("MCP: MCP23xLedPower %d, Index=%d, Pin=(not assigned)"), XdrvMailbox.index, index);  
+    AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("MCP: MCP23xLedPower %d, Index=%d, Pin=(not assigned)"), XdrvMailbox.index, index);
 }
 
 void MCP23xLedLink() {
-  bool state = (XdrvMailbox.index)?true:false;   
+  bool state = (XdrvMailbox.index)?true:false;
+  bool out = (TasmotaGlobal.ledlnk_inverted) ? !state : state;
   if (MCP23xPinUsed(GPIO_LEDLNK, 0)) {
-    uint32_t pin = MCP23xPin(GPIO_LEDLNK, 0) & 0x3F;   // Fix possible overflow over 63 gpios  
-    MCP23xDigitalWrite(pin, (TasmotaGlobal.ledlnk_inverted) ? !state : state);
-    AddLog(LOG_LEVEL_DEBUG, PSTR("MCP: MCP23xLedLink, Pin=0x%x, inverted=%d(0x%x)"), pin, TasmotaGlobal.ledlnk_inverted);
-  } 
+    uint32_t pin = MCP23xPin(GPIO_LEDLNK, 0) & 0x3F;   // Fix possible overflow over 63 gpios
+    if (Mcp23x.ledlnk_opendrain) {
+      // Open-drain: ON = high Z, OFF = OUTPUT LOW (sink current)      
+      if (out){
+        MCP23xPinMode(pin, INPUT);   // high-Z: no current path regardless of supply voltage
+      } else {
+        MCP23xPinMode(pin, OUTPUT);
+        MCP23xDigitalWrite(pin, 0);
+      }
+      AddLog(LOG_LEVEL_DEBUG, PSTR("MCP: MCP23xLedLink, Pin=0x%x, open-drain, state=%d, inverted=%d"), pin, state, TasmotaGlobal.ledlnk_inverted);
+    } else {
+      MCP23xDigitalWrite(pin, out);
+      AddLog(LOG_LEVEL_DEBUG, PSTR("MCP: MCP23xLedLink, Pin=0x%x, inverted=%d"), pin, TasmotaGlobal.ledlnk_inverted);
+    }
+  }
 }
 /*********************************************************************************************\
  * Interface

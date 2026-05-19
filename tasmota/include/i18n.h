@@ -100,6 +100,7 @@
 #define D_JSON_GROUPS "Groups"
 #define D_JSON_HALLEFFECT "HallEffect"
 #define D_JSON_HALTING "Halting"
+#define D_JSON_HCHO "Formaldehyde"
 #define D_JSON_HEAPSIZE "Heap"
 #define D_JSON_HEATINDEX "HeatIndex"
 #define D_JSON_HIGH "High"
@@ -131,6 +132,7 @@
 #define D_JSON_MODEL "Model"
 #define D_JSON_MOISTURE "Moisture"
 #define D_JSON_MQTT_COUNT "MqttCount"
+#define D_JSON_MQTT_TLS "MqttTLS"
 #define D_JSON_NULL "null"
 #define D_JSON_NO "No"
 #define D_JSON_NOISE "Noise"
@@ -162,6 +164,7 @@
 #define D_JSON_PUMP "Pumped"
 #define D_JSON_RED "Red"
 #define D_JSON_REFERENCETEMPERATURE "ReferenceTemperature"
+#define D_JSON_REGION "Region"
 #define D_JSON_REMAINING "Remaining"
 #define D_JSON_RESET "Reset"
 #define D_JSON_RESISTANCE "Resistance"
@@ -271,6 +274,7 @@
 // Commands tasmota.ino
 #define D_CMND_BACKLOG "Backlog"
 #define D_CMND_JSON "Json"
+#define D_CMND_JSON_PP "JsonPP"
 #define D_CMND_DELAY "Delay"
 #define D_CMND_NODELAY "NoDelay"
 #define D_CMND_STATUS "Status"
@@ -330,6 +334,8 @@
 #define D_CMND_UPGRADE "Upgrade"
   #define D_JSON_ONE_OR_GT "1 or >%s to upgrade"
 #define D_CMND_OTAURL "OtaUrl"
+#define D_CMND_HOSTEDOTA "HostedOta"
+#define D_CMND_HOSTEDLOAD "HostedLoad"
 #define D_CMND_SERIALLOG "SerialLog"
 #define D_CMND_SYSLOG "SysLog"
 #define D_CMND_FILELOG "FileLog"
@@ -392,10 +398,12 @@
 #define D_CMND_SERIALCONFIG "SerialConfig"
 #define D_CMND_TEMPLATE "Template"
   #define D_JSON_NAME "NAME"
+  #define D_JSON_ARCH "ARCH"
   #define D_JSON_GPIO "GPIO"
   #define D_JSON_FLAG "FLAG"
   #define D_JSON_BASE "BASE"
   #define D_JSON_CMND "CMND"
+  #define D_JSON_DCDR "DCDR"
 #define D_CMND_TEMPOFFSET "TempOffset"
 #define D_CMND_HUMOFFSET "HumOffset"
 #define D_CMND_GLOBAL_TEMP "GlobalTemp"
@@ -766,6 +774,7 @@
 #define D_CMND_SHUTTER_SETHALFWAY "SetHalfway"
 #define D_CMND_SHUTTER_SETCLOSE "SetClose"
 #define D_CMND_SHUTTER_SETOPEN "SetOpen"
+#define D_CMND_SHUTTER_SETPOSITION "SetPosition"
 #define D_CMND_SHUTTER_INVERT "Invert"
 #define D_CMND_SHUTTER_CLIBRATION "Calibration"
 #define D_CMND_SHUTTER_MOTORDELAY "MotorDelay"
@@ -849,6 +858,12 @@
 #define D_CMND_PIP_QED "QED"
 #define D_CMND_PIP_QEH "QEH"
 #define D_CMND_PIP_DAT "DAT"
+#define D_CMND_PIP_QMOD "QMOD"
+#define D_CMND_PIP_QPIWS "QPIWS"
+#define D_CMND_PIP_QPIRI "QPIRI"
+#define D_CMND_PIP_QPIGS "QPIGS"
+#define D_CMND_PIP_QFLAG "QFLAG"
+#define D_CMND_PIP_CUSTOM "CUSTOM"
 #define D_CMND_PIP_POLLVALUES "PollValues"
 #define D_CMND_PIP_BAUDRATE "BaudRate"
 #define D_CMND_PIP_SERIALCONFIG "SerialConfig"
@@ -858,18 +873,21 @@
 // Log message prefix
 #define D_LOG_APPLICATION "APP: "  // Application
 #define D_LOG_BRIDGE "BRG: "       // Bridge
+#define D_LOG_BERRY "BRY: "        // Berry scripting language
 #define D_LOG_CONFIG "CFG: "       // Settings
 #define D_LOG_COMMAND "CMD: "      // Command
 #define D_LOG_DEBUG "DBG: "        // Debug
 #define D_LOG_DHT "DHT: "          // DHT sensor
 #define D_LOG_DOMOTICZ "DOM: "     // Domoticz
 #define D_LOG_DSB "DSB: "          // DS18xB20 sensor
+#define D_LOG_ETH "ETH: "          // Ethernet
 #define D_LOG_HTTP "HTP: "         // HTTP webserver
-#define D_LOG_HRE "HRE: "
+#define D_LOG_HRE "HRE: "          // Badger HR-E Water Meter
 #define D_LOG_I2C "I2C: "          // I2C
 #define D_LOG_IRR "IRR: "          // Infra Red Received
-#define D_LOG_KNX "KNX: "
+#define D_LOG_KNX "KNX: "          // KNX server
 #define D_LOG_LOG "LOG: "          // Logging
+#define D_LOG_LVGL "LVG: "         // LVGL graphics engine
 #define D_LOG_MODULE "MOD: "       // Module
 #define D_LOG_MDNS "mDN: "         // mDNS
 #define D_LOG_MQTT "MQT: "         // MQTT
@@ -877,18 +895,17 @@
 #define D_LOG_RESULT "RSL: "       // Result
 #define D_LOG_RFR "RFR: "          // RF Received
 #define D_LOG_SERIAL "SER: "       // Serial
+#define D_LOG_SENSEAIR "SNA: "     // Senseair driver
+#define D_LOG_SENSOR "SNS: "       // Sensor driver
 #define D_LOG_SHT1 "SHT: "         // SHT1x sensor
+#define D_LOG_TCP "TCP: "          // TCP bridge
+#define D_LOG_TELNET "TEL: "       // Telnet server
+#define D_LOG_THERMOSTAT "THE: "   // Thermostat driver
+#define D_LOG_UFS "UFS: "          // File system
 #define D_LOG_UPLOAD "UPL: "       // Upload
 #define D_LOG_UPNP "UPP: "         // UPnP
 #define D_LOG_WIFI "WIF: "         // Wifi
-#define D_LOG_ETH "ETH: "          // Ethernet
 #define D_LOG_ZIGBEE "ZIG: "       // Zigbee
-#define D_LOG_TCP "TCP: "          // TCP bridge
-#define D_LOG_BERRY "BRY: "        // Berry scripting language
-#define D_LOG_LVGL "LVG: "         // LVGL graphics engine
-#define D_LOG_THERMOSTAT "THE: "   // Thermostat driver
-#define D_LOG_SENSOR "SNS: "       // Sensor driver
-#define D_LOG_SENSEAIR "SNA: "     // Senseair driver
 
 /********************************************************************************************/
 
@@ -966,15 +983,19 @@ const float kSpeedConversionFactor[] = {1,            // none
 // xdrv_02_webserver.ino
 #ifdef USE_WEBSERVER
 // {s} = <tr><th>, {m} = </th><td>, {e} = </td></tr>
-const char HTTP_SNS_HR[]            PROGMEM = "<tr><td colspan=2 style='font-size:2px'><hr/></td></tr>";
-const char HTTP_SNS_HR_THIN[]       PROGMEM = "<tr><td colspan=2 style='font-size:2px'><hr size=1/></td></tr>";
+const char HTTP_SNS_HR[]            PROGMEM = "<tr><td colspan=2 style='font-size:2px'><hr></td></tr>";
+const char HTTP_SNS_HR_THIN[]       PROGMEM = "<tr><td colspan=2 style='font-size:2px'><hr size=1></td></tr>";
+
 const char HTTP_SNS_F_TEMP[]        PROGMEM = "{s}%s "  D_TEMPERATURE         "{m}%*_f " D_UNIT_DEGREE          "%c{e}";
 const char HTTP_SNS_F_VOLTAGE[]     PROGMEM = "{s}%s "  D_VOLTAGE             "{m}%*_f " D_UNIT_VOLT              "{e}";
 const char HTTP_SNS_F_CURRENT[]     PROGMEM = "{s}%s "  D_CURRENT             "{m}%*_f " D_UNIT_AMPERE            "{e}";
 const char HTTP_SNS_F_CURRENT_MA[]  PROGMEM = "{s}%s "  D_CURRENT             "{m}%*_f " D_UNIT_MILLIAMPERE       "{e}";
+const char HTTP_SNS_F_POWER[]       PROGMEM = "{s}%s "  D_POWERUSAGE          "{m}%*_f " D_UNIT_WATT              "{e}";
 const char HTTP_SNS_F_DISTANCE_CM[] PROGMEM = "{s}%s "  D_DISTANCE            "{m}%1_f " D_UNIT_CENTIMETER        "{e}";
-const char HTTP_SNS_F_NOX[]         PROGMEM = "{s}%s "  D_NOX                 "{m}%*_f"                           "{e}";
-const char HTTP_SNS_F_VOC[]         PROGMEM = "{s}%s "  D_VOC                 "{m}%*_f"                           "{e}";
+const char HTTP_SNS_F_NOX[]         PROGMEM = "{s}%s "  D_NOX                 "{m}%0_f"                           "{e}";
+const char HTTP_SNS_F_VOC[]         PROGMEM = "{s}%s "  D_VOC                 "{m}%0_f"                           "{e}";
+const char HTTP_SNS_F_CO2[]         PROGMEM = "{s}%s "  D_CO2                 "{m}%0_f " D_UNIT_PARTS_PER_MILLION "{e}";
+const char HTTP_SNS_F_HCHO[]        PROGMEM = "{s}%s "  D_HCHO                "{m}%0_f " D_UNIT_PARTS_PER_BILLION "{e}";
 const char HTTP_SNS_F_ABS_HUM[]     PROGMEM = "{s}%s "  D_ABSOLUTE_HUMIDITY   "{m}%*_f " D_UNIT_GRAM_PER_CUBIC_METER "{e}";
 
 const char HTTP_SNS_HUM[]           PROGMEM = "{s}%s "  D_HUMIDITY            "{m}%s " D_UNIT_PERCENT             "{e}";
@@ -1038,6 +1059,8 @@ const char HTTP_SNS_IMPORT_REACTIVE[]     PROGMEM = "{s}" D_IMPORT_REACTIVE     
 const char HTTP_SNS_EXPORT_REACTIVE[]     PROGMEM = "{s}" D_EXPORT_REACTIVE         "{m}%s " D_UNIT_KWARH         "{e}";
 const char HTTP_SNS_TOTAL_REACTIVE[]      PROGMEM = "{s}" D_TOTAL_REACTIVE          "{m}%s " D_UNIT_KWARH         "{e}";
 const char HTTP_SNS_PHASE_ANGLE[]         PROGMEM = "{s}" D_PHASE_ANGLE             "{m}%s " D_UNIT_ANGLE         "{e}";
+const char HTTP_SNS_ADDRESS[]             PROGMEM = "{s}" D_ADDRESS                 "{m}%s"                       "{e}";
+
 #endif  // USE_WEBSERVER
 
 #endif  // _I18N_H_

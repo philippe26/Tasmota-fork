@@ -934,6 +934,7 @@ void SettingsMinimum(void) {
   if (Settings->mqtt_keepalive < 1) { Settings->mqtt_keepalive = MQTT_KEEPALIVE; }
   if (Settings->mqtt_socket_timeout < 1) { Settings->mqtt_socket_timeout = MQTT_SOCKET_TIMEOUT; }
   if (Settings->mqtt_wifi_timeout < 1) { Settings->mqtt_wifi_timeout = MQTT_WIFI_CLIENT_TIMEOUT / 100; }
+  if (Settings->seriallog_level < LOG_LEVEL_INFO) { Settings->seriallog_level = LOG_LEVEL_INFO; }  // Never mute serial log
 }
 
 void SettingsDefault(void) {

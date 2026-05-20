@@ -119,16 +119,24 @@ extern "C" {
   int32_t l_millis(struct bvm *vm);
   int32_t l_millis(struct bvm *vm) {
     int32_t top = be_top(vm); // Get the number of arguments
-    if (top == 1 || (top == 2 && be_isint(vm, 2))) {  // only 1 argument of type string accepted
+    if (top == 0 || (top == 1 && be_isint(vm, 1))) {  // only 1 argument of type string accepted
       uint32_t delay = 0;
-      if (top == 2) {
-        delay = be_toint(vm, 2);
+      if (top == 1) {
+        delay = be_toint(vm, 1);
       }
       uint32_t ret_millis = millis() + delay;
       be_pushint(vm, ret_millis);
       be_return(vm); // Return
     }
     be_raise(vm, kTypeError, nullptr);
+  }
+
+  // Berry: tasmota.micros() -> int
+  //
+  int32_t l_micros(struct bvm *vm);
+  int32_t l_micros(struct bvm *vm) {
+    be_pushint(vm, micros());
+    be_return(vm); // Return
   }
 
   // Berry: tasmota.get_option(index:int) -> int
@@ -218,6 +226,7 @@ extern "C" {
     // give info about stack size
     be_map_insert_int(vm, "stack_size", SET_ESP32_STACK_SIZE / 1024);
     be_map_insert_real(vm, "stack_low", ((float)uxTaskGetStackHighWaterMark(nullptr)) / 1024);
+    // values seen at last GC (fields not available in this build)
     if (UsePSRAM()) {
       be_map_insert_int(vm, "psram", ESP.getPsramSize() / 1024);
       be_map_insert_int(vm, "psram_free", ESP.getFreePsram() / 1024);
@@ -243,7 +252,7 @@ extern "C" {
       // (-2) map instance, (-1) map
     }
     be_map_insert_str(vm, "mac", WiFiHelper::macAddress().c_str());
-    be_map_insert_bool(vm, "up", WifiHasIP());
+    be_map_insert_bool(vm, "up", WifiHasIP() && Settings->flag4.network_wifi);
     if (Settings->flag4.network_wifi) {
       int32_t rssi = WiFi.RSSI();
       bool show_rssi = false;
@@ -266,6 +275,7 @@ extern "C" {
       if (show_rssi) {
         be_map_insert_int(vm, "rssi", rssi);
         be_map_insert_int(vm, "quality", WifiGetRssiAsQuality(rssi));
+        be_map_insert_str(vm, "ssid", SettingsTextEscaped(SET_STASSID1 + Settings->sta_active).c_str());
       }
     }
     be_pop(vm, 1);
@@ -1000,11 +1010,11 @@ extern "C" {
     be_return(vm);
   }
 
-  // Berry: `arvh() -> string`
+  // Berry: `arch() -> string`
   // ESP object
   int32_t l_arch(bvm *vm);
   int32_t l_arch(bvm *vm) {
-    be_pushstring(vm, ESP32_ARCH);
+    be_pushstring(vm, TASMOTA_ARCH);
     be_return(vm);
   }
 
@@ -1106,9 +1116,9 @@ extern "C" {
     va_end(arg);
     if (len+3 > LOGSZ) { strcat(log_data, "..."); }  // Actual data is more
     TasConsole.printf(log_data);
-#ifdef USE_SERIAL_BRIDGE
-    SerialBridgePrintf(log_data);
-#endif  // USE_SERIAL_BRIDGE
+#ifdef USE_TELNET
+    TelnetWrite(log_data, strlen(log_data));
+#endif  // USE_TELNET
   }
 
   void berry_log_C(const char * berry_buf, ...) {

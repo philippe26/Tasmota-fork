@@ -389,6 +389,7 @@ void SetAllPower(uint32_t state, uint32_t source) {
     publish_power = false;
   }
   if (((state >= POWER_OFF) && (state <= POWER_TOGGLE)) || (POWER_OFF_FORCE == state))  {
+    power_t current_power = TasmotaGlobal.power;
     power_t all_on = POWER_MASK >> (POWER_SIZE - TasmotaGlobal.devices_present);
     switch (state) {
     case POWER_OFF:
@@ -408,6 +409,13 @@ void SetAllPower(uint32_t state, uint32_t source) {
       TasmotaGlobal.power = 0; 
       break;
     }
+#ifdef USE_SONOFF_IFAN
+    if (IsModuleIfan()) {
+      // Do not touch Fan relays
+      TasmotaGlobal.power &= 0x0001;
+      TasmotaGlobal.power |= (current_power & 0xFFFE);
+    }
+#endif  // USE_SONOFF_IFAN
     SetDevicePower(TasmotaGlobal.power, source);
   }
   if (publish_power) {
@@ -544,7 +552,6 @@ void SetLedPowerIdx(uint32_t led, uint32_t state)
     XdrvMailbox.payload=payload;
   }
 #endif  // ESP32
-
 #ifdef USE_BUZZER
   if (led == 0) {
     BuzzerSetStateToLed(state);
@@ -552,18 +559,17 @@ void SetLedPowerIdx(uint32_t led, uint32_t state)
 #endif // USE_BUZZER
 }
 
-// update LedPower related to Power relays, when LedMask is set
 void SetLedPower(bool state)
 {
-  // Removed deprecated old-fashion LedLnk mode  
+  // Removed deprecated old-fashion LedLnk mode
   SetLedLink(state);
-  
+
   power_t mask = 1;
   for (uint32_t i = 0; i < TasmotaGlobal.leds_present; i++) {  // Map leds to power
     if (Settings->ledmask & mask) {
       // related power relay is selected for led reporting
       SetLedPowerIdx(i, TasmotaGlobal.power & mask);
-    }    
+    }
     mask <<= 1;
   }
 }
@@ -577,13 +583,13 @@ void SetLedPowerAll(uint32_t state)
 
 void SetLedLink(uint32_t state) {
   if (TasmotaGlobal.ledlnk_present) {
-    #ifdef ESP32
-      // HOOK to manage Link led by another drv (eg ShellyPro)
-      uint32_t index = XdrvMailbox.index;
-      XdrvMailbox.index = state;
-      XdrvCall(FUNC_LED_LINK);
-      XdrvMailbox.index = index;
-    #endif  // ESP32
+#ifdef ESP32
+    // HOOK to manage Link led by another drv (eg ShellyPro)
+    uint32_t index = XdrvMailbox.index;
+    XdrvMailbox.index = state;
+    XdrvCall(FUNC_LED_LINK);
+    XdrvMailbox.index = index;
+#endif  // ESP32
     int led_pin = Pin(GPIO_LEDLNK);
     uint32_t led_inv = TasmotaGlobal.ledlnk_inverted;
     if (led_pin >= 0) {
@@ -618,10 +624,9 @@ void SetPulseTimer(uint32_t index, uint32_t time)
 
 uint32_t GetPulseTimer(uint32_t index)
 {
-  long time = TimePassedSince(TasmotaGlobal.pulse_timer[index]);
-  if (time < 0) {
-    time *= -1;
-    return (time > 11100) ? (time / 1000) + 100 : (time > 0) ? time / 100 : 0;
+  int32_t time = -TimePassedSince(TasmotaGlobal.pulse_timer[index]);
+  if (TasmotaGlobal.pulse_timer[index] && time > 0) {
+      return (time > 11100) ? (time / 1000) + 100 : time / 100;
   }
   return 0;
 }
@@ -908,6 +913,15 @@ void MqttShowState(void)
     ResponseAppend_P(PSTR(","));
     MqttShowPWMState();
   }
+  
+  char *hostname = TasmotaGlobal.hostname;
+  uint32_t ipaddress = 0;
+#if defined(ESP32) && defined(USE_ETHERNET)
+  if (static_cast<uint32_t>(EthernetLocalIP()) != 0) {
+    hostname = EthernetHostname();           // Set ethernet as IP connection
+    ipaddress = (uint32_t)EthernetLocalIP();
+  }
+#endif
 
   if (!TasmotaGlobal.global_state.wifi_down) {
     int32_t rssi = WiFi.RSSI();
@@ -915,7 +929,15 @@ void MqttShowState(void)
       Settings->sta_active +1, EscapeJSONString(SettingsText(SET_STASSID1 + Settings->sta_active)).c_str(), WiFi.BSSIDstr().c_str(), WiFi.channel(),
       WifiGetPhyMode().c_str(), WifiGetRssiAsQuality(rssi), rssi,
       WifiLinkCount(), WifiDowntime().c_str());
+
+    if (static_cast<uint32_t>(WiFi.localIP()) != 0) {
+      hostname = TasmotaGlobal.hostname;     // Overrule ethernet as primary IP connection
+      ipaddress = (uint32_t)WiFi.localIP();
+    }
   }
+  // I only want to show one active connection for device access
+  ResponseAppend_P(PSTR(",\"" D_CMND_HOSTNAME "\":\"%s\",\"" D_CMND_IPADDRESS "\":\"%_I\""),
+    hostname, ipaddress);
 
   ResponseJsonEnd();
 }
@@ -1121,6 +1143,7 @@ void PerformEverySecond(void)
     RtcRebootReset();
 
     Settings->last_module = Settings->module;
+
 
 #ifdef USE_DEEPSLEEP
     if (!(DeepSleepEnabled() && !Settings->flag3.bootcount_update)) {  // SetOption76  - (Deepsleep) Enable incrementing bootcount (1) when deepsleep is enabled
@@ -1346,7 +1369,7 @@ void Every250mSeconds(void)
       if (200 == TasmotaGlobal.blinks) { TasmotaGlobal.blinks = 0; }  // Disable blink
     }
   }
-  if (Settings->ledstate &1 && (TasmotaGlobal.ledlnk_present || !(TasmotaGlobal.blinks || TasmotaGlobal.restart_flag || TasmotaGlobal.ota_state_flag)) ) {
+  if (Settings->ledstate &1 && (PinUsed(GPIO_LEDLNK) || !(TasmotaGlobal.blinks || TasmotaGlobal.restart_flag || TasmotaGlobal.ota_state_flag)) ) {
     bool tstate = TasmotaGlobal.power & Settings->ledmask;
 #ifdef ESP8266
     if ((SONOFF_TOUCH == TasmotaGlobal.module_type) || (SONOFF_T11 == TasmotaGlobal.module_type) || (SONOFF_T12 == TasmotaGlobal.module_type) || (SONOFF_T13 == TasmotaGlobal.module_type)) {
@@ -1784,8 +1807,11 @@ void ArduinoOtaLoop(void)
 
 /********************************************************************************************/
 
-void SerialInput(void)
-{
+void SerialInput(void) {
+#ifdef USE_XYZMODEM
+  if (XYZModemActive(TXMP_TASCONSOLE)) { return; }
+#endif  // USE_XYZMODEM
+
   static uint32_t serial_polling_window = 0;
   static bool serial_buffer_overrun = false;
 
@@ -1815,11 +1841,26 @@ void SerialInput(void)
 #endif  // ESP8266
 /*-------------------------------------------------------------------------------------------*/
 
+#ifdef USE_IMPROV
+    if (ImprovSerialInput()) {
+      TasmotaGlobal.serial_in_byte_counter = 0;
+      continue;
+    }
+#endif  // USE_IMPROV
+
+/*-------------------------------------------------------------------------------------------*/
+
     if (XdrvCall(FUNC_SERIAL)) {
       TasmotaGlobal.serial_in_byte_counter = 0;
       Serial.flush();
       return;
     }
+
+/*-------------------------------------------------------------------------------------------*/
+
+#ifdef USE_XYZMODEM
+    if (XYZModemStart(TXMP_TASCONSOLE, TasmotaGlobal.serial_in_byte)) { return; }
+#endif  // USE_XYZMODEM
 
 /*-------------------------------------------------------------------------------------------*/
 
@@ -1880,7 +1921,7 @@ void SerialInput(void)
 
     if (!Settings->flag.mqtt_serial && (TasmotaGlobal.serial_in_byte == '\n')) {   // CMND_SERIALSEND and CMND_SERIALLOG
       TasmotaGlobal.serial_in_buffer[TasmotaGlobal.serial_in_byte_counter] = 0;    // Serial data completed
-      TasmotaGlobal.seriallog_level = (Settings->seriallog_level < LOG_LEVEL_INFO) ? (uint8_t)LOG_LEVEL_INFO : Settings->seriallog_level;
+      SetSeriallog(LOG_LEVEL_NONE);
       if (serial_buffer_overrun) {
         AddLog(LOG_LEVEL_INFO, PSTR(D_LOG_COMMAND "Serial buffer overrun"));
       } else {
@@ -1933,11 +1974,26 @@ void SerialInput(void)
 String console_buffer = "";
 
 void TasConsoleInput(void) {
+#ifdef USE_XYZMODEM
+  if (XYZModemActive(TXMP_TASCONSOLE)) { return; }
+#endif  // USE_XYZMODEM
+
   static bool console_buffer_overrun = false;
 
   while (TasConsole.available()) {
     delay(0);
     char console_in_byte = TasConsole.read();
+
+#ifdef USE_IMPROV
+    if (ImprovSerialInput()) {
+      console_buffer = "";
+      continue;
+    }
+#endif  // USE_IMPROV
+
+#ifdef USE_XYZMODEM
+    if (XYZModemStart(TXMP_TASCONSOLE, console_in_byte)) { return; }
+#endif  // USE_XYZMODEM
 
     if (isprint(console_in_byte)) {                       // Any char between 32 and 127
       if (console_buffer.length() < INPUT_BUFFER_SIZE) {  // Add char to string if it still fits
@@ -1947,7 +2003,7 @@ void TasConsoleInput(void) {
       }
     }
     else if (console_in_byte == '\n') {
-      TasmotaGlobal.seriallog_level = (Settings->seriallog_level < LOG_LEVEL_INFO) ? (uint8_t)LOG_LEVEL_INFO : Settings->seriallog_level;
+      SetSeriallog(LOG_LEVEL_NONE);
       if (console_buffer_overrun) {
         AddLog(LOG_LEVEL_INFO, PSTR(D_LOG_COMMAND "USB buffer overrun"));
       } else {
@@ -2251,40 +2307,11 @@ void GpioInit(void)
   }
 
 #ifdef USE_I2C
-/*
-  if (PinUsed(GPIO_I2C_SCL) && PinUsed(GPIO_I2C_SDA)) {
-    TasmotaGlobal.i2c_enabled[0] = I2cBegin(Pin(GPIO_I2C_SDA), Pin(GPIO_I2C_SCL));
-#ifdef ESP32
-    if (TasmotaGlobal.i2c_enabled[0]) {
-      AddLog(LOG_LEVEL_INFO, PSTR("I2C: Bus1 using GPIO%02d(SCL) and GPIO%02d(SDA)"), Pin(GPIO_I2C_SCL), Pin(GPIO_I2C_SDA));
-    }
-#endif
-  }
-#ifdef ESP32
-  if (PinUsed(GPIO_I2C_SCL, 1) && PinUsed(GPIO_I2C_SDA, 1)) {
-    TasmotaGlobal.i2c_enabled[1] = I2cBegin(Pin(GPIO_I2C_SDA, 1), Pin(GPIO_I2C_SCL, 1), 1);
-    if (TasmotaGlobal.i2c_enabled[1]) {
-      AddLog(LOG_LEVEL_INFO, PSTR("I2C: Bus2 using GPIO%02d(SCL) and GPIO%02d(SDA)"), Pin(GPIO_I2C_SCL, 1), Pin(GPIO_I2C_SDA, 1));
-    }
-  }
-#endif
-*/
-  uint32_t max_bus = 1;
-#ifdef USE_I2C_BUS2
-  max_bus = 2;
-#endif  // USE_I2C_BUS2
-  for (uint32_t bus = 0; bus < max_bus; bus++) {
+  for (uint32_t bus = 0; bus < MAX_I2C; bus++) {
     if (PinUsed(GPIO_I2C_SCL, bus) && PinUsed(GPIO_I2C_SDA, bus)) {
       if (I2cBegin(Pin(GPIO_I2C_SDA, bus), Pin(GPIO_I2C_SCL, bus), bus)) {
-        if (0 == bus) { 
-          TasmotaGlobal.i2c_enabled[0] = true;
-        }
-#ifdef USE_I2C_BUS2
-        else { 
-          TasmotaGlobal.i2c_enabled[1] = true;
-        }
+        TasmotaGlobal.i2c_enabled[bus] = true;
         AddLog(LOG_LEVEL_INFO, PSTR("I2C: Bus%d using GPIO%02d(SCL) and GPIO%02d(SDA)"), bus +1, Pin(GPIO_I2C_SCL, bus), Pin(GPIO_I2C_SDA, bus));
-#endif  // USE_I2C_BUS2
       }
     }
   }
@@ -2355,16 +2382,12 @@ void GpioInit(void)
 #endif
     }
   }
-
-  if (PinUsed(GPIO_LEDLNK, 0)) {
-    DigitalWrite(GPIO_LEDLNK, 0, TasmotaGlobal.ledlnk_inverted);
-    TasmotaGlobal.ledlnk_present=1;
-  }
+  DigitalWrite(GPIO_LEDLNK, 0, TasmotaGlobal.ledlnk_inverted);
 
 #ifdef USE_PWM_DIMMER
   if (PWM_DIMMER == TasmotaGlobal.module_type && PinUsed(GPIO_REL1)) { TasmotaGlobal.devices_present--; }
 #endif  // USE_PWM_DIMMER
 
   SetLedPower(Settings->ledstate &8);
-  //SetLedLink(Settings->ledstate &8);
+  SetLedLink(Settings->ledstate &8);
 }

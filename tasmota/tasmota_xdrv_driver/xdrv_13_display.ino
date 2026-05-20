@@ -186,6 +186,10 @@ void (* const DisplayCommand[])(void) PROGMEM = {
 
 #ifdef USE_GRAPH
 
+#ifndef NUM_GRAPHS
+#define NUM_GRAPHS      4                    // Max 16
+#endif
+
 typedef union {
   uint8_t data;
   struct {

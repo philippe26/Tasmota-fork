@@ -21,6 +21,7 @@ extern int l_publish_rule(bvm *vm);
 extern int l_cmd(bvm *vm);
 extern int l_getoption(bvm *vm);
 extern int l_millis(bvm *vm);
+extern int l_micros(bvm *vm);
 extern int l_timereached(bvm *vm);
 extern int l_rtc(bvm *vm);
 extern int l_rtc_utc(bvm *vm);
@@ -73,9 +74,6 @@ extern int tasm_apply_str_op(bvm *vm);
 extern int32_t be_Tasmota_version(void);
 BE_FUNC_CTYPE_DECLARE(be_Tasmota_version, "i", "-");
 
-extern bbool BerryBECLoader(const char * url);
-BE_FUNC_CTYPE_DECLARE(BerryBECLoader, "b", "s")
-
 #include "solidify/solidified_tasmota_class.h"
 #include "solidify/solidified_rule_matcher.h"
 #include "solidify/solidified_trigger_class.h"
@@ -87,9 +85,12 @@ class be_class_tasmota (scope: global, name: Tasmota) {
     _fl, var                            // list of active fast-loop object (faster than drivers)
     _rules, var                         // list of active rules
     _timers, var                        // list of active timers
+    _defer, var                         // list of deferred functions to be called at next millisecond
     _crons, var                         // list of active crons
     _ccmd, var                          // list of active Tasmota commands implemented in Berry
     _drivers, var                       // list of active drivers
+    _ext, var                           // list of active extensions
+    _wnu, var                           // list of closures to call when network is connected
     wire1, var                          // Tasmota I2C Wire1
     wire2, var                          // Tasmota I2C Wire2
     cmd_res, var                        // store the command result, nil if disables, true if capture enabled, contains return value
@@ -106,13 +107,14 @@ class be_class_tasmota (scope: global, name: Tasmota) {
     init, closure(class_Tasmota_init_closure)
 
     get_free_heap, func(l_getFreeHeap)
-    arch, func(l_arch)
+    arch, static_func(l_arch)
     publish, func(be_mqtt_publish)
     publish_result, func(l_publish_result)
     publish_rule, func(l_publish_rule)
     _cmd, func(l_cmd)
     get_option, func(l_getoption)
-    millis, func(l_millis)
+    millis, static_func(l_millis)
+    micros, static_func(l_micros)
     time_reached, func(l_timereached)
     rtc, static_func(l_rtc)
     rtc_utc, func(l_rtc_utc)
@@ -155,7 +157,7 @@ class be_class_tasmota (scope: global, name: Tasmota) {
     get_button_state, func(l_getbuttonstate)
     get_switch, func(l_getswitch)     // deprecated
     get_switches, func(l_getswitch)
-
+    
     i2c_enabled, func(l_i2cenabled)
     version, ctype_func(be_Tasmota_version)
 
@@ -189,7 +191,6 @@ class be_class_tasmota (scope: global, name: Tasmota) {
     time_str, closure(class_Tasmota_time_str_closure)
     urlfetch, closure(class_Tasmota_urlfetch_closure)
     urlfetch_cmd, closure(class_Tasmota_urlfetch_cmd_closure)
-    urlbecload, static_ctype_func(BerryBECLoader)
 
     add_cron, closure(class_Tasmota_add_cron_closure)
     run_cron, closure(class_Tasmota_run_cron_closure)

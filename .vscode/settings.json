@@ -1,4 +1,12 @@
 {
+    "cSpell.customDictionaries": {
+        "tasmota-project": {
+            "name": "tasmota-project",
+            "path": "${workspaceFolder}/cspell.json",
+            "scope": "workspace",
+            "addWords": true
+        }
+    },
     "terminal.integrated.cwd": "${workspaceFolder}",
     "platformio-ide.toolbar": [
       {

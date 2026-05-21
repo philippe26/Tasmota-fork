@@ -428,7 +428,8 @@ void CmndBrRestart(void) {
 void BrLoad(const char * script_name) {
   if (berry.vm == nullptr || TasmotaGlobal.no_autoexec) { return; }   // abort is berry is not running, or bootloop prevention kicked in
 
-  if (!strcmp_P(script_name, "autoexec.be")) {
+  bool is_autoexec = !strcmp_P(script_name, "autoexec.be");
+  if (is_autoexec) {
     if (Settings->flag6.berry_no_autoexec) {   // SetOption153 - (Berry) Disable autoexec.be on restart (1)
       return;
     }
@@ -441,6 +442,10 @@ void BrLoad(const char * script_name) {
     BrTimeoutStart();
     if (be_pcall(berry.vm, 1) != 0) {
       be_error_pop_all(berry.vm);             // clear Berry stack
+      if (is_autoexec) {
+        AddLog(LOG_LEVEL_ERROR, D_LOG_BERRY "autoexec.be crashed - disabling Berry autoexec (SetOption153 1)");
+        Settings->flag6.berry_no_autoexec = 1;  // saved by SettingsSaveAll() at restart
+      }
       return;
     }
     BrTimeoutReset();
@@ -449,6 +454,12 @@ void BrLoad(const char * script_name) {
     if (loaded) {
       AddLog(LOG_LEVEL_INFO, D_LOG_BERRY "Successfully loaded '%s'", script_name);
     } else {
+      if (is_autoexec && TasmotaGlobal.restart_flag) {
+        // load() returned false and a restart was requested: script crashed and triggered restart
+        AddLog(LOG_LEVEL_ERROR, D_LOG_BERRY "autoexec crashed and requested restart - disabling Berry autoexec (SetOption153 1)");
+        Settings->flag6.berry_no_autoexec = 1;
+        SettingsSave(2);  // force immediate save, bypass CRC check
+      }
       AddLog(LOG_LEVEL_DEBUG, D_LOG_BERRY "No '%s'", script_name);
     }
   }

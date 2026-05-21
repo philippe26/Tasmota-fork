@@ -1,0 +1,17 @@
+{
+  "_comment": "SwimPool-V2 module template — encode with tasmota_template_tool.py",
+  "name": "SwimPool-V2",
+  "base": 1,
+  "flag": 0,
+  "gpios": [
+    "NONE",           "NONE",           "NONE",           "NONE",
+    "ETH_PHY_POWER",  "ETH_PHY_MDC",    "NONE",           "NONE",
+    "BUZZER",         "NONE:1",         "NONE:1",         "NONE",
+    "NONE:1",         "NONE:1",         "SPI_CLK",        "SPI_MISO",
+    "NONE",           "I2C_SDA",        "I2C_SCL",        "SPI_MOSI",
+    "NONE",           "TM1638STB",      "TM1638CLK",      "TM1638DIO",
+    "NONE",           "NONE",           "NONE",           "NONE",
+    "DSB",            "DSB:1",          "MCP23XXX_INT",   "ETH_PHY_MDIO",
+    "ADC_INPUT",      "NONE",           "NONE",           "ADC_INPUT:1"
+  ]
+}

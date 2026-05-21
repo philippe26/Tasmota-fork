@@ -1,0 +1,23 @@
+{
+  "name": "MCP23017 A=Buttons, B=relays/leds",
+  "base": 1,
+  "topology": [16, 0, 0, 0],
+  "gpios": [
+    "KEY1",
+    "KEY1:1",
+    "KEY1:2",
+    "KEY1:3",
+    "KEY1:4",
+    "KEY1:5",
+    "KEY1:6",
+    "KEY1:7",
+    "LED1_INV_OPENDRAIN",
+    "REL1:4",
+    "LED1_INV_OPENDRAIN:1",
+    "REL1:5",
+    "LED1_INV_OPENDRAIN:2",
+    "REL1:6",
+    "LED1_INV_OPENDRAIN:3",
+    "REL1:7"
+  ]
+}

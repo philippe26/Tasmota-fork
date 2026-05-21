@@ -73,7 +73,7 @@
  *
  * Buttons and relays                        B1 B2 B3 B4 B5 B6 B7 B8 R1  R2  R3  R4  R5  R6  R7  R8
  * {"NAME":"MCP23017 A=B1-8, B=R1-8","GPIO":[32,33,34,35,36,37,38,39,224,225,226,227,228,229,230,231]}
- * 
+ *
  * Buttons and relays with open-drain INT    B1 B2 B3 B4 B5 B6 B7 B8 R1  R2  R3  R4  R5  R6  R7  R8
  * {"NAME":"MCP23017 A=B1-8, B=R1-8","GPIO":[32,33,34,35,36,37,38,39,224,225,226,227,228,229,230,231],"IOCON":0x5C}
  *
@@ -159,10 +159,11 @@ typedef struct {
   uint8_t olata;
   uint8_t olatb;
   uint8_t address;
+  uint8_t bus;
   uint8_t interface;
-  uint8_t pins;                           // 8 (MCP23x08) or 16 (MCP23x17)  
+  uint8_t pins;                           // 8 (MCP23x08) or 16 (MCP23x17)
   int8_t pin_cs;
-  int8_t pin_int; 
+  int8_t pin_int;
 } tMcp23xDevice;
 
 typedef union {                           // Restricted by MISRA-C Rule 18.4 but so useful...
@@ -195,7 +196,7 @@ struct MCP230 {
   int8_t button_offset;
   int8_t switch_offset;
   bool base;
-  bool interrupt;  
+  bool interrupt;
   uint8_t led_offset;
   uint8_t led_inverted;
   uint32_t led_opendrain;              // bitmask: bit n set = led index n uses open-drain emulation
@@ -239,7 +240,7 @@ void MCP23xDumpRegs(void) {
 #endif
 #ifdef USE_I2C
     if (MCP23X_I2C == Mcp23x.device[Mcp23x.chip].interface) {
-      I2cReadBuffer(Mcp23x.device[Mcp23x.chip].address, 0, data, data_size);
+      I2cReadBuffer(Mcp23x.device[Mcp23x.chip].address, 0, data, data_size, Mcp23x.device[Mcp23x.chip].bus);
     }
 #endif
     AddLog(LOG_LEVEL_DEBUG, PSTR("MCP: Intf %d, Address %02X, Regs %*_H"), Mcp23x.device[Mcp23x.chip].interface, Mcp23x.device[Mcp23x.chip].address, data_size, data);
@@ -261,7 +262,7 @@ uint32_t MCP23xRead16(uint8_t reg) {
 #endif
 #ifdef USE_I2C
   if (MCP23X_I2C == Mcp23x.device[Mcp23x.chip].interface) {
-    value = I2cRead16LE(Mcp23x.device[Mcp23x.chip].address, reg);
+    value = I2cRead16LE(Mcp23x.device[Mcp23x.chip].address, reg, Mcp23x.device[Mcp23x.chip].bus);
   }
 #endif
   return value;
@@ -280,7 +281,7 @@ uint32_t MCP23xRead(uint8_t reg) {
 #endif
 #ifdef USE_I2C
   if (MCP23X_I2C == Mcp23x.device[Mcp23x.chip].interface) {
-    value = I2cRead8(Mcp23x.device[Mcp23x.chip].address, reg);
+    value = I2cRead8(Mcp23x.device[Mcp23x.chip].address, reg, Mcp23x.device[Mcp23x.chip].bus);
   }
 #endif
   return value;
@@ -299,10 +300,10 @@ bool MCP23xValidRead(uint8_t reg, uint8_t *data) {
 #endif
 #ifdef USE_I2C
   if (MCP23X_I2C == Mcp23x.device[Mcp23x.chip].interface) {
-    return I2cValidRead8(data, Mcp23x.device[Mcp23x.chip].address, reg);
-  }  
+    return I2cValidRead8(data, Mcp23x.device[Mcp23x.chip].address, reg, Mcp23x.device[Mcp23x.chip].bus);
+  }
 #endif
-return false;
+  return false;
 }
 
 void MCP23xWrite(uint8_t reg, uint8_t value) {
@@ -317,7 +318,7 @@ void MCP23xWrite(uint8_t reg, uint8_t value) {
 #endif
 #ifdef USE_I2C
   if (MCP23X_I2C == Mcp23x.device[Mcp23x.chip].interface) {
-    I2cWrite8(Mcp23x.device[Mcp23x.chip].address, reg, value);
+    I2cWrite8(Mcp23x.device[Mcp23x.chip].address, reg, value, Mcp23x.device[Mcp23x.chip].bus);
   }
 #endif
 }
@@ -471,7 +472,6 @@ int MCP23xPin(uint32_t gpio, uint32_t index = 0);
 int MCP23xPin(uint32_t gpio, uint32_t index) {
   uint16_t real_gpio = gpio << 5;
   uint16_t mask = 0xFFE0;
-  
   if (index < GPIO_ANY) {
     real_gpio += index;
     mask = 0xFFFF;
@@ -499,9 +499,9 @@ uint32_t MCP23xGetPin(uint32_t lpin) {
 
 /*********************************************************************************************/
 
-bool MCP23xAddItem(uint8_t &item) {
-  if (item >= MAX_RELAYS_SET) {                        // MAX_RELAYS_SET = MAX_SWITCHES_SET = MAX_KEYS_SET = 32
-    AddLog(LOG_LEVEL_INFO, PSTR("MCP: Max RELAYS reached"));
+bool MCP23xAddItem(uint8_t &item, uint8_t max_items, const char *type_name) {
+  if (item >= max_items) {
+    AddLog(LOG_LEVEL_INFO, PSTR("MCP: Max %s reached"), type_name);
     return false;
   }
   item++;
@@ -561,48 +561,47 @@ bool MCP23xLoadTemplate(void) {
       if (!val) { break; }
       uint16_t mpin = val.getUInt();
       if (mpin) {                                      // Above GPIO_NONE
-        if ((mpin >= AGPIO(GPIO_SWT1)) && (mpin < (AGPIO(GPIO_SWT1) + MAX_SWITCHES_SET)) && MCP23xAddItem(Mcp23x.switch_max)) {
+        if ((mpin >= AGPIO(GPIO_SWT1)) && (mpin < (AGPIO(GPIO_SWT1) + MAX_SWITCHES_SET)) && MCP23xAddItem(Mcp23x.switch_max, MAX_SWITCHES_SET, "Switches")) {
           MCP23xSetPinModes(pin, INPUT_PULLUP);
         }
-        else if ((mpin >= AGPIO(GPIO_SWT1_NP)) && (mpin < (AGPIO(GPIO_SWT1_NP) + MAX_SWITCHES_SET)) && MCP23xAddItem(Mcp23x.switch_max)) {
+        else if ((mpin >= AGPIO(GPIO_SWT1_NP)) && (mpin < (AGPIO(GPIO_SWT1_NP) + MAX_SWITCHES_SET)) && MCP23xAddItem(Mcp23x.switch_max, MAX_SWITCHES_SET, "Switches")) {
           mpin -= (AGPIO(GPIO_SWT1_NP) - AGPIO(GPIO_SWT1));
           MCP23xSetPinModes(pin, INPUT);
         }
-        else if ((mpin >= AGPIO(GPIO_KEY1)) && (mpin < (AGPIO(GPIO_KEY1) + MAX_KEYS_SET)) && MCP23xAddItem(Mcp23x.button_max)) {
+        else if ((mpin >= AGPIO(GPIO_KEY1)) && (mpin < (AGPIO(GPIO_KEY1) + MAX_KEYS_SET)) && MCP23xAddItem(Mcp23x.button_max, MAX_KEYS_SET, "Buttons")) {
           MCP23xSetPinModes(pin, INPUT_PULLUP);
         }
-        else if ((mpin >= AGPIO(GPIO_KEY1_NP)) && (mpin < (AGPIO(GPIO_KEY1_NP) + MAX_KEYS_SET)) && MCP23xAddItem(Mcp23x.button_max)) {
+        else if ((mpin >= AGPIO(GPIO_KEY1_NP)) && (mpin < (AGPIO(GPIO_KEY1_NP) + MAX_KEYS_SET)) && MCP23xAddItem(Mcp23x.button_max, MAX_KEYS_SET, "Buttons")) {
           mpin -= (AGPIO(GPIO_KEY1_NP) - AGPIO(GPIO_KEY1));
           MCP23xSetPinModes(pin, INPUT);
         }
-        else if ((mpin >= AGPIO(GPIO_KEY1_INV)) && (mpin < (AGPIO(GPIO_KEY1_INV) + MAX_KEYS_SET)) && MCP23xAddItem(Mcp23x.button_max)) {
+        else if ((mpin >= AGPIO(GPIO_KEY1_INV)) && (mpin < (AGPIO(GPIO_KEY1_INV) + MAX_KEYS_SET)) && MCP23xAddItem(Mcp23x.button_max, MAX_KEYS_SET, "Buttons")) {
           bitSet(Mcp23x.button_inverted, mpin - AGPIO(GPIO_KEY1_INV));
           mpin -= (AGPIO(GPIO_KEY1_INV) - AGPIO(GPIO_KEY1));
           MCP23xSetPinModes(pin, INPUT_PULLUP);
         }
-        else if ((mpin >= AGPIO(GPIO_KEY1_INV_NP)) && (mpin < (AGPIO(GPIO_KEY1_INV_NP) + MAX_KEYS_SET)) && MCP23xAddItem(Mcp23x.button_max)) {
+        else if ((mpin >= AGPIO(GPIO_KEY1_INV_NP)) && (mpin < (AGPIO(GPIO_KEY1_INV_NP) + MAX_KEYS_SET)) && MCP23xAddItem(Mcp23x.button_max, MAX_KEYS_SET, "Buttons")) {
           bitSet(Mcp23x.button_inverted, mpin - AGPIO(GPIO_KEY1_INV_NP));
           mpin -= (AGPIO(GPIO_KEY1_INV_NP) - AGPIO(GPIO_KEY1));
           MCP23xSetPinModes(pin, INPUT);
         }
-        else if ((mpin >= AGPIO(GPIO_REL1)) && (mpin < (AGPIO(GPIO_REL1) + MAX_RELAYS_SET)) && MCP23xAddItem(Mcp23x.relay_max)) {
+        else if ((mpin >= AGPIO(GPIO_REL1)) && (mpin < (AGPIO(GPIO_REL1) + MAX_RELAYS_SET)) && MCP23xAddItem(Mcp23x.relay_max, MAX_RELAYS_SET, "Relays")) {
           MCP23xPinMode(pin, OUTPUT);
         }
-        else if ((mpin >= AGPIO(GPIO_REL1_INV)) && (mpin < (AGPIO(GPIO_REL1_INV) + MAX_RELAYS_SET)) && MCP23xAddItem(Mcp23x.relay_max)) {
+        else if ((mpin >= AGPIO(GPIO_REL1_INV)) && (mpin < (AGPIO(GPIO_REL1_INV) + MAX_RELAYS_SET)) && MCP23xAddItem(Mcp23x.relay_max, MAX_RELAYS_SET, "Relays")) {
           bitSet(Mcp23x.relay_inverted, mpin - AGPIO(GPIO_REL1_INV));
           mpin -= (AGPIO(GPIO_REL1_INV) - AGPIO(GPIO_REL1));
           MCP23xPinMode(pin, OUTPUT);
         }
-        else if ((mpin >= AGPIO(GPIO_LED1)) && (mpin < (AGPIO(GPIO_LED1) + MAX_LEDS))&& MCP23xAddItem(Mcp23x.led_max)) {                    
-          Mcp23x.led_max++;
+        else if ((mpin >= AGPIO(GPIO_LED1)) && (mpin < (AGPIO(GPIO_LED1) + MAX_LEDS)) && MCP23xAddItem(Mcp23x.led_max, MAX_LEDS, "Leds")) {
           MCP23xPinMode(pin, OUTPUT);
         }
-        else if ((mpin >= AGPIO(GPIO_LED1_INV)) && (mpin < (AGPIO(GPIO_LED1_INV) + MAX_LEDS))&& MCP23xAddItem(Mcp23x.led_max)) {
+        else if ((mpin >= AGPIO(GPIO_LED1_INV)) && (mpin < (AGPIO(GPIO_LED1_INV) + MAX_LEDS)) && MCP23xAddItem(Mcp23x.led_max, MAX_LEDS, "Leds")) {
           bitSet(Mcp23x.led_inverted, mpin - AGPIO(GPIO_LED1_INV));
           mpin -= (AGPIO(GPIO_LED1_INV) - AGPIO(GPIO_LED1));
           MCP23xPinMode(pin, OUTPUT);
         }
-        else if ((mpin >= AGPIO(GPIO_LED1_INV_OPENDRAIN)) && (mpin < (AGPIO(GPIO_LED1_INV_OPENDRAIN) + MAX_LEDS)) && MCP23xAddItem(Mcp23x.led_max)) {
+        else if ((mpin >= AGPIO(GPIO_LED1_INV_OPENDRAIN)) && (mpin < (AGPIO(GPIO_LED1_INV_OPENDRAIN) + MAX_LEDS)) && MCP23xAddItem(Mcp23x.led_max, MAX_LEDS, "Leds")) {
           uint8_t led_index = mpin - AGPIO(GPIO_LED1_INV_OPENDRAIN);
           bitSet(Mcp23x.led_inverted, led_index);
           bitSet(Mcp23x.led_opendrain, led_index);
@@ -610,10 +609,10 @@ bool MCP23xLoadTemplate(void) {
           // Open-drain: start as INPUT (high-Z = LED OFF)
           MCP23xPinMode(pin, INPUT);
         }
-        else if ((mpin >= AGPIO(GPIO_LEDLNK) && (mpin <= (AGPIO(GPIO_LEDLNK)+1))) && !TasmotaGlobal.ledlnk_present) {                           
+        else if ((mpin >= AGPIO(GPIO_LEDLNK) && (mpin <= (AGPIO(GPIO_LEDLNK)+1))) && !TasmotaGlobal.ledlnk_present) {
           Mcp23x.ledlnk_opendrain = (mpin - AGPIO(GPIO_LEDLNK)) ? true: false;
           TasmotaGlobal.ledlnk_present++;
-          MCP23xPinMode(pin, OUTPUT);                    
+          MCP23xPinMode(pin, OUTPUT);
         }
         else if ((mpin >= AGPIO(GPIO_LEDLNK_INV) && (mpin <= (AGPIO(GPIO_LEDLNK_INV)+1))) && !TasmotaGlobal.ledlnk_present) {
           Mcp23x.ledlnk_opendrain = (mpin - AGPIO(GPIO_LEDLNK_INV)) ? true: false;
@@ -621,7 +620,7 @@ bool MCP23xLoadTemplate(void) {
           TasmotaGlobal.ledlnk_present++;
           TasmotaGlobal.ledlnk_inverted=1;
           MCP23xPinMode(pin, OUTPUT);
-        }        
+        }
         else if (mpin == AGPIO(GPIO_OUTPUT_HI)) {
           MCP23xPinMode(pin, OUTPUT);
           MCP23xDigitalWrite(pin, 1);
@@ -635,7 +634,7 @@ bool MCP23xLoadTemplate(void) {
       }
     }
     Mcp23x.max_pins = pin;                             // Reduce Max to number of configured pins
-    AddLog(LOG_LEVEL_INFO, PSTR("MCP: Successfully Configured %d Pins : Switch=%d, Buttons=%d, Relays=%d, Leds=%d, LedLNK=%d)"), 
+    AddLog(LOG_LEVEL_INFO, PSTR("MCP: Successfully Configured %d Pins : Switch=%d, Buttons=%d, Relays=%d, Leds=%d, LedLNK=%d)"),
       Mcp23x.max_pins, Mcp23x.switch_max, Mcp23x.button_max, Mcp23x.relay_max, Mcp23x.led_max, TasmotaGlobal.ledlnk_present);
   }
 
@@ -659,17 +658,17 @@ uint32_t MCP23xTemplateGpio(void) {
   }
 
   JsonParserArray topo = root[PSTR(D_JSON_TOPO)];
-  if (topo) {    
-    for (int i=0; i< MCP23XXX_MAX_DETECTED_ADDR; i++) { 
+  if (topo) {
+    for (int i=0; i< MCP23XXX_MAX_DETECTED_ADDR; i++) {
       JsonParserToken val = topo[i];
-      Mcp23x.expected_pins[i]= val?val.getUInt():0;      
+      Mcp23x.expected_pins[i]= val?val.getUInt():0;
     }
     AddLog(LOG_LEVEL_DEBUG, PSTR("MCP: Topology found in Template, devices checking enabled"));
   } else {
-    for (int i=0; i< MCP23XXX_MAX_DETECTED_ADDR; i++) 
-      Mcp23x.expected_pins[i]=-1; 
+    for (int i=0; i< MCP23XXX_MAX_DETECTED_ADDR; i++)
+      Mcp23x.expected_pins[i]=-1;
   }
-  
+
   JsonParserArray arr = root[PSTR(D_JSON_GPIO)];
   if (arr.isArray()) {
     return arr.size();                                // Number of requested pins
@@ -730,49 +729,57 @@ void MCP23xModuleInit(void) {
   } else {
 #endif  // USE_SPI
 #ifdef USE_I2C
-    uint8_t mcp23xxx_address = MCP23XXX_ADDR_START;
-    while ((Mcp23x.max_devices < MCP23XXX_MAX_DEVICES) && (mcp23xxx_address < MCP23XXX_ADDR_END)) {
-      Mcp23x.chip = Mcp23x.max_devices;
-      uint32_t pin_int = (Mcp23x.iocon.ODR) ? 0 : Mcp23x.chip;  // INT pins are open-drain outputs and supposedly connected together to one GPIO
-      if (I2cSetDevice(mcp23xxx_address)) {
-        Mcp23x.device[Mcp23x.chip].pin_int = (PinUsed(GPIO_MCP23XXX_INT, pin_int)) ? Pin(GPIO_MCP23XXX_INT, pin_int) : -1;
-        Mcp23x.device[Mcp23x.chip].interface = MCP23X_I2C;
-        Mcp23x.device[Mcp23x.chip].address = mcp23xxx_address;
+    for (uint32_t bus = 0; bus < MAX_I2C; bus++) {
+      uint8_t mcp23xxx_address = MCP23XXX_ADDR_START;
+      while ((Mcp23x.max_devices < MCP23XXX_MAX_DEVICES) && (mcp23xxx_address < MCP23XXX_ADDR_END)) {
+        Mcp23x.chip = Mcp23x.max_devices;
+        uint32_t pin_int = (Mcp23x.iocon.ODR) ? 0 : Mcp23x.chip;  // INT pins are open-drain outputs and supposedly connected together to one GPIO
+        if (I2cSetDevice(mcp23xxx_address, bus)) {
+          Mcp23x.device[Mcp23x.chip].pin_int = (PinUsed(GPIO_MCP23XXX_INT, pin_int)) ? Pin(GPIO_MCP23XXX_INT, pin_int) : -1;
+          Mcp23x.device[Mcp23x.chip].interface = MCP23X_I2C;
+          Mcp23x.device[Mcp23x.chip].address = mcp23xxx_address;
+          Mcp23x.device[Mcp23x.chip].bus = bus;
 
-        MCP23xWrite(MCP23X08_IOCON, 0x80);               // Attempt to set bank mode - this will only work on MCP23x17, so its the best way to detect the different chips 23x08 vs 23x17
-        uint8_t buffer;
-        if (MCP23xValidRead(MCP23X08_IOCON, &buffer)) {
-          if (0x00 == buffer) {
-            I2cSetActiveFound(mcp23xxx_address, "MCP23008");
-            Mcp23x.device[Mcp23x.chip].pins = 8;
-//            MCP23xWrite(MCP23X08_IOCON, 0b00011000);   // Slew rate disabled, HAEN pins for addressing
-            MCP23xWrite(MCP23X08_IOCON, Mcp23x.iocon.reg & 0x3E);
-            Mcp23x.device[Mcp23x.chip].olata = MCP23xRead(MCP23X08_OLAT);
-            Mcp23x.max_devices++;
+          MCP23xWrite(MCP23X08_IOCON, 0x80);               // Attempt to set bank mode - this will only work on MCP23x17, so its the best way to detect the different chips 23x08 vs 23x17
+          uint8_t buffer;
+          if (MCP23xValidRead(MCP23X08_IOCON, &buffer)) {
+            if (0x00 == buffer) {
+              I2cSetActiveFound(mcp23xxx_address, "MCP23008", bus);
+              Mcp23x.device[Mcp23x.chip].pins = 8;
+//              MCP23xWrite(MCP23X08_IOCON, 0b00011000);   // Slew rate disabled, HAEN pins for addressing
+              MCP23xWrite(MCP23X08_IOCON, Mcp23x.iocon.reg & 0x3E);
+              Mcp23x.device[Mcp23x.chip].olata = MCP23xRead(MCP23X08_OLAT);
+              Mcp23x.max_devices++;
+            }
+            else if (0x80 == buffer) {
+              I2cSetActiveFound(mcp23xxx_address, "MCP23017", bus);
+              Mcp23x.device[Mcp23x.chip].pins = 16;
+              MCP23xWrite(MCP23X08_IOCON, 0x00);           // Reset bank mode to 0 (MCP23X17_GPINTENB)
+//              MCP23xWrite(MCP23X17_IOCONA, 0b01011000);  // Enable INT mirror, Slew rate disabled, HAEN pins for addressing
+              MCP23xWrite(MCP23X17_IOCONA, Mcp23x.iocon.reg);
+              Mcp23x.device[Mcp23x.chip].olata = MCP23xRead(MCP23X17_OLATA);
+              Mcp23x.device[Mcp23x.chip].olatb = MCP23xRead(MCP23X17_OLATB);
+              Mcp23x.max_devices++;
+            }
+            Mcp23x.max_pins += Mcp23x.device[Mcp23x.chip].pins;
+            pins_needed -= Mcp23x.device[Mcp23x.chip].pins;
           }
-          else if (0x80 == buffer) {
-            I2cSetActiveFound(mcp23xxx_address, "MCP23017");
-            Mcp23x.device[Mcp23x.chip].pins = 16;
-            MCP23xWrite(MCP23X08_IOCON, 0x00);           // Reset bank mode to 0 (MCP23X17_GPINTENB)
-//            MCP23xWrite(MCP23X17_IOCONA, 0b01011000);  // Enable INT mirror, Slew rate disabled, HAEN pins for addressing
-            MCP23xWrite(MCP23X17_IOCONA, Mcp23x.iocon.reg);
-            Mcp23x.device[Mcp23x.chip].olata = MCP23xRead(MCP23X17_OLATA);
-            Mcp23x.device[Mcp23x.chip].olatb = MCP23xRead(MCP23X17_OLATB);
-            Mcp23x.max_devices++;
-          }
-          Mcp23x.max_pins += Mcp23x.device[Mcp23x.chip].pins;
-          pins_needed -= Mcp23x.device[Mcp23x.chip].pins;
+        } else {
+          Mcp23x.device[Mcp23x.chip].pins = 0;
         }
-      } else 
-        Mcp23x.device[Mcp23x.chip].pins = 0;
 
-      if (pins_needed) {
-        // template requested pins have not been consumed, yet
-        // thus check next adress
-        mcp23xxx_address++;
-      } else {
-        // all pins assigned from template, thus stop scanning i2c devices
-        mcp23xxx_address = MCP23XXX_ADDR_END;
+        if (pins_needed) {
+          // template requested pins have not been consumed, yet
+          // thus check next adress
+          mcp23xxx_address++;
+        } else {
+          // all pins assigned from template, thus stop scanning i2c devices
+          mcp23xxx_address = MCP23XXX_ADDR_END;
+          break;
+        }
+      }
+      if (!pins_needed) {
+        break;
       }
     }
 #endif  // USE_I2C
@@ -780,40 +787,40 @@ void MCP23xModuleInit(void) {
   }
 #endif  // USE_SPI
 
-  if (!Mcp23x.max_devices) { 
-    if (Mcp23x.expected_pins[0] != -1){
+  if (!Mcp23x.max_devices) {
+    if (Mcp23x.expected_pins[0] != -1) {
       int pins=0;
       int devices=0;
-      for (int i=0; i<MCP23XXX_MAX_DETECTED_ADDR ; i++) 
+      for (int i=0; i<MCP23XXX_MAX_DETECTED_ADDR ; i++)
         if (Mcp23x.expected_pins[i]>0) {
           pins += Mcp23x.expected_pins[i];
           devices++;
         }
       AddLog(LOG_LEVEL_ERROR, PSTR("MCP: No device found while template requires %d devices (%d pins)"), devices, pins);
-    }    
-    return; 
+    }
+    return;
   }
 
   // check compliance of detected device against template
   if (Mcp23x.expected_pins[0] != -1) {
     uint8_t offset;
     // check the detected device first
-    for (int i=0; i<Mcp23x.max_devices; i++) {   // Max number of detected chip pins  
+    for (int i=0; i<Mcp23x.max_devices; i++) {   // Max number of detected chip pins
       offset=Mcp23x.device[i].address - MCP23XXX_ADDR_START;
       if (offset<MCP23XXX_MAX_DETECTED_ADDR) {
-        if  (Mcp23x.expected_pins[offset] !=  Mcp23x.device[i].pins) {        
-          AddLog(LOG_LEVEL_ERROR, PSTR("MCP: Pin Mismatch vs template - expecting %d pins at address 0x%x - detected %d pins"), 
-            Mcp23x.expected_pins[i], Mcp23x.device[i].address, Mcp23x.device[i].pins);     
+        if  (Mcp23x.expected_pins[offset] !=  Mcp23x.device[i].pins) {
+          AddLog(LOG_LEVEL_ERROR, PSTR("MCP: Pin Mismatch vs template - expecting %d pins at address 0x%x - detected %d pins"),
+            Mcp23x.expected_pins[i], Mcp23x.device[i].address, Mcp23x.device[i].pins);
           return;
         }
         Mcp23x.expected_pins[offset]=-2; // clear detected pins
       }
-    }   
+    }
     // check if remaining undetected devices
-    for (int i=0; i<MCP23XXX_MAX_DETECTED_ADDR; i++) {   
+    for (int i=0; i<MCP23XXX_MAX_DETECTED_ADDR; i++) {
       if (Mcp23x.expected_pins[i]>0) {
-        AddLog(LOG_LEVEL_ERROR, PSTR("MCP: Undetected device vs template - expecting %d pins at address 0x%x"), 
-          Mcp23x.expected_pins[i], i+MCP23XXX_ADDR_START);     
+        AddLog(LOG_LEVEL_ERROR, PSTR("MCP: Undetected device vs template - expecting %d pins at address 0x%x"),
+          Mcp23x.expected_pins[i], i+MCP23XXX_ADDR_START);
         return;
       }
     }
@@ -968,13 +975,13 @@ void MCP23xLedPower() {
     uint32_t pin = MCP23xPin(GPIO_LED1, index) & 0x3F;   // Fix possible overflow over 63 gpios
     bool out = bitRead(Mcp23x.led_inverted, index) ? !state : state;
     if (bitRead(Mcp23x.led_opendrain, index)) {
-      // Open-drain emulation: ON = high Z, OFF = OUTPUT LOW (sink current)      
+      // Open-drain emulation: ON = high Z, OFF = OUTPUT LOW (sink current)
       if (out) {
         MCP23xPinMode(pin, INPUT);   // high-Z: no current path
       } else {
-        MCP23xPinMode(pin, OUTPUT);  // Low : sink current  
+        MCP23xPinMode(pin, OUTPUT);  // Low : sink current
         MCP23xDigitalWrite(pin, 0);
-      }  
+      }
       AddLog(LOG_LEVEL_DEBUG, PSTR("MCP: MCP23xLedPower %d, Index=%d, Pin=0x%x, open-drain, state=%d"), XdrvMailbox.index, index, pin, state);
     } else {
       MCP23xDigitalWrite(pin, out);
@@ -990,7 +997,7 @@ void MCP23xLedLink() {
   if (MCP23xPinUsed(GPIO_LEDLNK, 0)) {
     uint32_t pin = MCP23xPin(GPIO_LEDLNK, 0) & 0x3F;   // Fix possible overflow over 63 gpios
     if (Mcp23x.ledlnk_opendrain) {
-      // Open-drain: ON = high Z, OFF = OUTPUT LOW (sink current)      
+      // Open-drain: ON = high Z, OFF = OUTPUT LOW (sink current)
       if (out){
         MCP23xPinMode(pin, INPUT);   // high-Z: no current path regardless of supply voltage
       } else {
@@ -1004,6 +1011,7 @@ void MCP23xLedLink() {
     }
   }
 }
+
 /*********************************************************************************************\
  * Interface
 \*********************************************************************************************/
@@ -1036,7 +1044,6 @@ bool Xdrv67(uint32_t function) {
           MCP23xServiceInput();
         }
         break;
-
       case FUNC_SET_POWER:
         MCP23xPower();
         break;
@@ -1054,10 +1061,10 @@ bool Xdrv67(uint32_t function) {
         break;
       case FUNC_LED:
         MCP23xLedPower();
-        break;  
+        break;
       case FUNC_LED_LINK:
         MCP23xLedLink();
-        break;    
+        break;
     }
   }
   return result;
